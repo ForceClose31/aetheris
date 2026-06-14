@@ -1,0 +1,10 @@
+{
+  "id": "balance.stat_curves",
+  "pointsPerLevel": 5,
+  "bonusEveryNLevels": 5,
+  "bonusPoints": 1,
+  "perLevel": {
+    "hp": 8,
+    "mp": 4
+  }
+}

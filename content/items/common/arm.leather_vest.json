@@ -1,0 +1,14 @@
+{
+  "id": "arm.leather_vest",
+  "name": { "en": "Leather Vest" },
+  "slot": "chest",
+  "rarity": "common",
+  "level": 1,
+  "stats": { "vit": 1 },
+  "tags": ["leather", "starter"],
+  "source": "merchant",
+  "stackable": false,
+  "maxStack": 1,
+  "sellPrice": 8,
+  "description": "Common traveler's wear, stitched in Eldermill."
+}

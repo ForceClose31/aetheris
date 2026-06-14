@@ -1,0 +1,5 @@
+{
+  "id": "balance.damage_formula",
+  "defCoef": 0.5,
+  "minDamage": 1
+}

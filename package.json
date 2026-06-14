@@ -1,0 +1,42 @@
+{
+  "name": "aetheris",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Aetheris - 2D Pixel Medieval Fantasy RPG (Phaser 3 + TypeScript)",
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.10.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --pretty",
+    "lint": "eslint \"src/**/*.ts\" \"tools/**/*.ts\"",
+    "lint:fix": "eslint --fix \"src/**/*.ts\" \"tools/**/*.ts\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx,json,md}\" \"tools/**/*.ts\" \"docs/**/*.md\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,json,md}\" \"tools/**/*.ts\" \"docs/**/*.md\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "content:validate": "tsx tools/content-validator/index.ts",
+    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm content:validate"
+  },
+  "dependencies": {
+    "phaser": "3.87.0",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.10",
+    "@typescript-eslint/eslint-plugin": "8.18.1",
+    "@typescript-eslint/parser": "8.18.1",
+    "eslint": "9.17.0",
+    "eslint-config-prettier": "9.1.0",
+    "eslint-plugin-import": "2.31.0",
+    "prettier": "3.4.2",
+    "tsx": "4.19.2",
+    "typescript": "5.6.3",
+    "vite": "5.4.11",
+    "vitest": "2.1.8"
+  }
+}

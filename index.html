@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>Aetheris</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: #0a0a0e;
+        color: #e6e6ec;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+          'Courier New', monospace;
+        overflow: hidden;
+        width: 100vw;
+        height: 100vh;
+      }
+      #game-root {
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #game-root canvas {
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+      }
+      #boot-fallback {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        letter-spacing: 0.05em;
+        color: #888;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game-root">
+      <div id="boot-fallback">loading aetheris...</div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

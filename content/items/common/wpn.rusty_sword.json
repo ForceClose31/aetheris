@@ -1,0 +1,14 @@
+{
+  "id": "wpn.rusty_sword",
+  "name": { "en": "Rusty Sword" },
+  "slot": "main",
+  "rarity": "common",
+  "level": 1,
+  "stats": { "str": 2 },
+  "tags": ["sword", "starter"],
+  "source": "drop",
+  "stackable": false,
+  "maxStack": 1,
+  "sellPrice": 5,
+  "description": "A pitted iron blade. Better than nothing."
+}

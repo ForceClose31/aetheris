@@ -1,0 +1,15 @@
+{
+  "id": "balance.player_base",
+  "startingLevel": 1,
+  "startingStamina": 100,
+  "base": {
+    "hp": 50,
+    "mp": 20,
+    "str": 5,
+    "vit": 5,
+    "agi": 5,
+    "dex": 5,
+    "int": 5,
+    "luk": 5
+  }
+}

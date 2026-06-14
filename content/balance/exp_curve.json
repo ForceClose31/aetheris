@@ -1,0 +1,8 @@
+{
+  "id": "balance.exp_curve",
+  "formula": "polynomial",
+  "a": 50,
+  "p": 2.4,
+  "b": 100,
+  "maxLevel": 200
+}

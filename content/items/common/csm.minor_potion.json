@@ -1,0 +1,13 @@
+{
+  "id": "csm.minor_potion",
+  "name": { "en": "Minor Healing Potion" },
+  "slot": "consumable",
+  "rarity": "common",
+  "level": 1,
+  "tags": ["potion", "heal"],
+  "source": "merchant",
+  "stackable": true,
+  "maxStack": 99,
+  "sellPrice": 4,
+  "description": "Restores a small amount of HP."
+}
