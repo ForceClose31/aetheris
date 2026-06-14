@@ -1,0 +1,15 @@
+{
+  "id": "dlg.brann.default",
+  "start": "greet",
+  "nodes": {
+    "greet": {
+      "kind": "say",
+      "speaker": { "en": "Old Brann" },
+      "lines": [
+        { "en": "Bring me iron and I'll bring out steel. Not yet though, kid." }
+      ],
+      "next": "end"
+    },
+    "end": { "kind": "end" }
+  }
+}

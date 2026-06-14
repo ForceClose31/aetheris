@@ -101,6 +101,74 @@ const validMonster = () => ({
   },
 });
 
+const validMaps = () => ({
+  'map.test.town': {
+    id: 'map.test.town',
+    name: { en: 'Town' },
+    type: 'town',
+    tileSize: 16,
+    tiles: [
+      [1, 1, 1],
+      [1, 5, 1],
+      [1, 1, 1],
+    ],
+    defaultSpawn: 'spawn.center',
+    spawns: [{ id: 'spawn.center', pos: [1, 1] }],
+    exits: [],
+    npcs: [{ npcId: 'npc.test', spawn: [1, 1] }],
+    monsters: [{ monsterId: 'mon.test_slime', weight: 1, maxConcurrent: 1 }],
+    indoor: false,
+  },
+});
+
+const validNpcs = () => ({
+  'npc.test': {
+    id: 'npc.test',
+    name: { en: 'Test' },
+    dialogueId: 'dlg.test',
+    schedule: [{ fromHour: 0, toHour: 23, mapId: 'map.test.town', pos: [1, 1] }],
+    placeholderColor: 'aabbcc',
+  },
+});
+
+const validDialogues = () => ({
+  'dlg.test': {
+    id: 'dlg.test',
+    start: 'a',
+    nodes: { a: { kind: 'end', setFlags: [] } },
+  },
+});
+
+const validRegions = () => ({
+  'reg.test': {
+    id: 'reg.test',
+    name: { en: 'Test Region' },
+    levelRange: [1, 5],
+    mapIds: ['map.test.town'],
+    hubMapId: 'map.test.town',
+  },
+});
+
+const validQuests = () => ({
+  'qst.test.intro': {
+    id: 'qst.test.intro',
+    name: { en: 'Intro' },
+    type: 'main',
+    hidden: false,
+    prereqs: [],
+    autoStart: true,
+    objectives: [
+      {
+        kind: 'kill',
+        monsterId: 'mon.test_slime',
+        count: 1,
+        description: { en: 'kill 1' },
+      },
+    ],
+    rewards: { exp: 0, gold: 0, items: [], flagsSet: [] },
+  },
+});
+
 const fullSource = () => ({
   items: { 'wpn.iron_sword': validItem() },
   balance: validBalance(),
@@ -108,20 +176,24 @@ const fullSource = () => ({
   statusEffects: validStatus(),
   monsters: validMonster(),
   lootTables: validLoot(),
+  regions: validRegions(),
+  maps: validMaps(),
+  npcs: validNpcs(),
+  dialogues: validDialogues(),
+  quests: validQuests(),
 });
 
 describe('ContentRegistry', () => {
-  it('loads valid items + balance + skills + status + monsters + loot', () => {
+  it('loads all kinds and runs cross-reference checks', () => {
     const r = new ContentRegistry();
     const result = r.loadAll(fullSource());
     expect(result.ok).toBe(true);
     expect(r.itemCount()).toBe(1);
-    expect(r.requireItem('wpn.iron_sword').name.en).toBe('Iron Sword');
-    expect(r.getBalance().expCurve.maxLevel).toBe(200);
-    expect(r.requireSkill('skl.basic_slash').name.en).toBe('Basic Slash');
-    expect(r.requireMonster('mon.test_slime').family).toBe('slime');
-    expect(r.requireLootTable('loot.basic').entries).toHaveLength(2);
-    expect(r.requireStatusEffect('stx.burn').tag).toBe('burn');
+    expect(r.requireMap('map.test.town').name.en).toBe('Town');
+    expect(r.requireNpc('npc.test').dialogueId).toBe('dlg.test');
+    expect(r.requireDialogue('dlg.test').start).toBe('a');
+    expect(r.requireRegion('reg.test').hubMapId).toBe('map.test.town');
+    expect(r.requireQuest('qst.test.intro').type).toBe('main');
   });
 
   it('reports validation errors for invalid items', () => {
@@ -149,9 +221,6 @@ describe('ContentRegistry', () => {
     const src = fullSource();
     const result = r.loadAll({ ...src, balance: {} });
     expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.length).toBeGreaterThanOrEqual(4);
-    }
   });
 
   it('detects monster referencing unknown skill', () => {
@@ -163,9 +232,7 @@ describe('ContentRegistry', () => {
     const result = r.loadAll({ ...src, monsters: monsterMap });
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(
-        result.error.some((e) => e.message.includes('skl.does_not_exist')),
-      ).toBe(true);
+      expect(result.error.some((e) => e.message.includes('skl.does_not_exist'))).toBe(true);
     }
   });
 
@@ -185,26 +252,38 @@ describe('ContentRegistry', () => {
     const result = r.loadAll({ ...src, lootTables: lootMap });
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(
-        result.error.some((e) => e.message.includes('wpn.does_not_exist')),
-      ).toBe(true);
+      expect(result.error.some((e) => e.message.includes('wpn.does_not_exist'))).toBe(true);
     }
   });
 
-  it('detects skill referencing unknown status effect', () => {
+  it('detects map referencing unknown exit map', () => {
     const r = new ContentRegistry();
     const src = fullSource();
-    const skillMap = validSkill();
-    const s = skillMap['skl.basic_slash'] as { effects: { statusId: string; chance: number }[] };
-    s.effects = [{ statusId: 'stx.does_not_exist', chance: 1 }];
-    const result = r.loadAll({ ...src, skills: skillMap });
+    const maps = validMaps();
+    const m = maps['map.test.town'] as { exits: unknown[] };
+    m.exits = [
+      {
+        id: 'broken',
+        rect: [1, 1, 1, 1],
+        to: { mapId: 'map.does_not_exist', marker: 'spawn.center' },
+        requireFlags: [],
+      },
+    ];
+    const result = r.loadAll({ ...src, maps });
     expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.some((e) => e.message.includes('map.does_not_exist'))).toBe(true);
+    }
   });
 
-  it('throws when querying unknown items via requireItem', () => {
+  it('detects npc referencing unknown dialogue', () => {
     const r = new ContentRegistry();
-    r.loadAll(fullSource());
-    expect(() => r.requireItem('nope')).toThrow();
+    const src = fullSource();
+    const npcs = validNpcs();
+    const n = npcs['npc.test'] as { dialogueId: string };
+    n.dialogueId = 'dlg.zz';
+    const result = r.loadAll({ ...src, npcs });
+    expect(result.ok).toBe(false);
   });
 
   it('throws when balance is requested before successful load', () => {

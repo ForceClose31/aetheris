@@ -1,0 +1,50 @@
+{
+  "id": "dlg.mayor.default",
+  "start": "intro",
+  "nodes": {
+    "intro": {
+      "kind": "say",
+      "speaker": { "en": "Mayor Talvin" },
+      "lines": [
+        { "en": "Thank the heavens you survived." },
+        { "en": "Eldermill thanks you. The plains are crawling with goblins lately." }
+      ],
+      "next": "task",
+      "requireFlags": [],
+      "setFlags": [{ "flag": "quest.mayor.met", "set": true }]
+    },
+    "task": {
+      "kind": "choice",
+      "speaker": { "en": "Mayor Talvin" },
+      "prompt": { "en": "Could I ask a favor?" },
+      "options": [
+        {
+          "label": { "en": "What's the favor?" },
+          "next": "explain"
+        },
+        {
+          "label": { "en": "Not now." },
+          "next": "later"
+        }
+      ]
+    },
+    "explain": {
+      "kind": "say",
+      "speaker": { "en": "Mayor Talvin" },
+      "lines": [
+        { "en": "Cull a few goblin scouts in the south plains. Bring back proof - any number will do." },
+        { "en": "I'll see you rewarded properly." }
+      ],
+      "next": "end_quest",
+      "setFlags": [{ "flag": "quest.mayor.accepted", "set": true }]
+    },
+    "later": {
+      "kind": "end",
+      "setFlags": []
+    },
+    "end_quest": {
+      "kind": "end",
+      "setFlags": []
+    }
+  }
+}

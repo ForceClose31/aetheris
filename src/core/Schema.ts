@@ -2,9 +2,10 @@
  * Schema - Zod helpers for validation with file-context error reporting.
  */
 
+import type { ZodError, ZodIssue, ZodTypeAny, z } from 'zod';
+
 import { err, ok, type Result } from './Result';
 
-import type { ZodError, ZodIssue, ZodTypeAny, z } from 'zod';
 
 export interface ValidationFailure {
   readonly source: string; // file path or virtual id

@@ -7,13 +7,11 @@
  */
 
 import type { Rng } from '@core/Rng';
-
-import type { MonsterInstance } from '@domain/actors/MonsterInstance';
-import type { Player } from '@domain/actors/Player';
-
 import type { ContentRegistry } from '@data/registry/ContentRegistry';
 import type { DamageFormula } from '@data/schemas/balance.schema';
 import type { Skill } from '@data/schemas/skill.schema';
+import type { MonsterInstance } from '@domain/actors/MonsterInstance';
+import type { Player } from '@domain/actors/Player';
 
 import { computeDamage, type AttackerProfile, type DefenderProfile } from './Damage';
 

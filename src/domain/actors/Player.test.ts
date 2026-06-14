@@ -1,6 +1,6 @@
+import type { ExpCurve, PlayerBase, StatCurves } from '@data/schemas/balance.schema';
 import { describe, expect, it } from 'vitest';
 
-import type { ExpCurve, PlayerBase, StatCurves } from '@data/schemas/balance.schema';
 
 import { Player } from './Player';
 

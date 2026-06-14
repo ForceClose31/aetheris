@@ -7,12 +7,10 @@
  */
 
 import type { Rng } from '@core/Rng';
-
-import type { DerivedStats } from '@domain/actors/DerivedStats';
-import type { Element } from '@domain/actors/StatBlock';
-
 import type { DamageFormula } from '@data/schemas/balance.schema';
 import type { Skill } from '@data/schemas/skill.schema';
+import type { DerivedStats } from '@domain/actors/DerivedStats';
+import type { Element } from '@domain/actors/StatBlock';
 
 export interface AttackerProfile {
   readonly atk: number;

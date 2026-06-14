@@ -1,23 +1,20 @@
 /**
  * HudScene - overlay rendered on top of WorldScene.
  *
- * Phase 1: HP/MP/Stamina bars, level, EXP progress, free points.
- * Phase 2: gold, inventory count, skill cooldown chips.
+ * Phase 3: adds map name, time-of-day clock, active quest summary.
  */
 
+
 import { getRootLocator } from '@core/ServiceLocator';
-import { expToNext } from '@systems/leveling/Leveling';
-import Phaser from 'phaser';
-
-import type { CooldownTracker } from '@systems/combat/CooldownTracker';
-
+import type { WorldClock } from '@core/Time';
+import type { ContentRegistry } from '@data/registry/ContentRegistry';
 import type { Player } from '@domain/actors/Player';
 import type { Inventory } from '@domain/inventory/Inventory';
-
-import type { ContentRegistry } from '@data/registry/ContentRegistry';
-
-
-
+import type { CooldownTracker } from '@systems/combat/CooldownTracker';
+import { expToNext } from '@systems/leveling/Leveling';
+import type { QuestSystem } from '@systems/quest/QuestSystem';
+import type { WorldState } from '@systems/world/WorldState';
+import Phaser from 'phaser';
 
 import { TOKENS } from './BootScene';
 
@@ -34,6 +31,9 @@ export class HudScene extends Phaser.Scene {
   private registry_!: ContentRegistry;
   private inventory!: Inventory;
   private cooldowns!: CooldownTracker;
+  private quests!: QuestSystem;
+  private worldState!: WorldState;
+  private clock!: WorldClock;
 
   private hpBar!: Phaser.GameObjects.Rectangle;
   private mpBar!: Phaser.GameObjects.Rectangle;
@@ -46,6 +46,9 @@ export class HudScene extends Phaser.Scene {
   private pointsText!: Phaser.GameObjects.Text;
   private goldText!: Phaser.GameObjects.Text;
   private bagText!: Phaser.GameObjects.Text;
+  private mapText!: Phaser.GameObjects.Text;
+  private clockText!: Phaser.GameObjects.Text;
+  private questText!: Phaser.GameObjects.Text;
   private skillChips: { label: Phaser.GameObjects.Text; cd: Phaser.GameObjects.Text }[] = [];
 
   constructor() {
@@ -58,6 +61,9 @@ export class HudScene extends Phaser.Scene {
     this.registry_ = locator.get(TOKENS.ContentRegistry);
     this.inventory = locator.get(TOKENS.Inventory);
     this.cooldowns = locator.get(TOKENS.CooldownTracker);
+    this.quests = locator.get(TOKENS.QuestSystem);
+    this.worldState = locator.get(TOKENS.WorldState);
+    this.clock = locator.get(TOKENS.WorldClock);
 
     const x0 = PADDING;
     let y = PADDING;
@@ -96,6 +102,11 @@ export class HudScene extends Phaser.Scene {
       .text(x0 + 14 + BAR_W + 4, y, '0/0', { ...labelStyle, color: '#9999a0' })
       .setOrigin(0, 0);
 
+    y += 10;
+    this.mapText = this.add.text(x0, y, '', { ...labelStyle, color: '#aaaab0' });
+    y += 8;
+    this.questText = this.add.text(x0, y, '', { ...labelStyle, color: '#a0c0ff' });
+
     const { width, height } = this.scale;
     this.levelText = this.add
       .text(width - PADDING, PADDING, 'Lv 1', {
@@ -127,8 +138,13 @@ export class HudScene extends Phaser.Scene {
         color: '#9999a0',
       })
       .setOrigin(1, 0);
+    this.clockText = this.add
+      .text(width - PADDING, PADDING + 42, '', {
+        ...labelStyle,
+        color: '#9999a0',
+      })
+      .setOrigin(1, 0);
 
-    // Skill hotbar at bottom.
     const baseX = PADDING;
     const baseY = height - PADDING - 14;
     for (let i = 0; i < SKILL_HOTBAR.length; i++) {
@@ -182,6 +198,39 @@ export class HudScene extends Phaser.Scene {
 
     this.goldText.setText(`g ${this.inventory.getGold()}`);
     this.bagText.setText(`bag ${this.inventory.totalItems()}`);
+
+    const now = this.clock.now();
+    const hh = now.hour.toString().padStart(2, '0');
+    const mm = now.minute.toString().padStart(2, '0');
+    this.clockText.setText(`${hh}:${mm}  d${now.day}`);
+
+    const map = this.registry_.getMap(this.worldState.getCurrentMapId());
+    this.mapText.setText(map?.name.en ?? this.worldState.getCurrentMapId());
+
+    const active = this.quests.activeQuests();
+    if (active.length === 0) {
+      this.questText.setText('');
+    } else {
+      const a = active[0];
+      if (a !== undefined) {
+        const obj = a.quest.objectives[0];
+        const counter = a.progress.counters[0] ?? 0;
+        if (obj !== undefined) {
+          let target = 1;
+          let label = '';
+          if (obj.kind === 'kill') {
+            target = obj.count;
+            label = obj.description.en;
+          } else if (obj.kind === 'collect') {
+            target = obj.count;
+            label = obj.description.en;
+          } else {
+            label = obj.description.en;
+          }
+          this.questText.setText(`${label} (${counter}/${target})`);
+        }
+      }
+    }
 
     for (let i = 0; i < SKILL_HOTBAR.length; i++) {
       const entry = SKILL_HOTBAR[i];

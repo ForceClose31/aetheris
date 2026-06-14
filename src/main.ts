@@ -7,6 +7,7 @@
 
 import { GAME_CONFIG } from '@config/game.config';
 import { BootScene } from '@scenes/BootScene';
+import { DialogueScene } from '@scenes/DialogueScene';
 import { HudScene } from '@scenes/HudScene';
 import { PreloadScene } from '@scenes/PreloadScene';
 import { TitleScene } from '@scenes/TitleScene';
@@ -38,7 +39,7 @@ const start = (): void => {
       default: 'arcade',
       arcade: { gravity: { x: 0, y: 0 }, debug: false },
     },
-    scene: [BootScene, PreloadScene, TitleScene, WorldScene, HudScene],
+    scene: [BootScene, PreloadScene, TitleScene, WorldScene, HudScene, DialogueScene],
   };
 
   // Phaser.Game registers itself in the parent DOM node; reference is intentional.

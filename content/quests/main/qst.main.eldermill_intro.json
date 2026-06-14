@@ -1,0 +1,28 @@
+{
+  "id": "qst.main.eldermill_intro",
+  "name": { "en": "Eldermill's Plea" },
+  "type": "main",
+  "hidden": false,
+  "prereqs": [{ "flag": "quest.mayor.accepted", "equals": true }],
+  "autoStart": true,
+  "objectives": [
+    {
+      "kind": "kill",
+      "monsterId": "mon.goblin_scout",
+      "count": 3,
+      "description": { "en": "Defeat 3 goblin scouts in the South Plains." }
+    },
+    {
+      "kind": "talk",
+      "npcId": "npc.mayor_talvin",
+      "description": { "en": "Report back to Mayor Talvin." }
+    }
+  ],
+  "rewards": {
+    "exp": 80,
+    "gold": 25,
+    "items": [{ "itemId": "csm.minor_potion", "qty": 2 }],
+    "flagsSet": ["quest.mayor.eldermill_intro.done"]
+  },
+  "description": { "en": "Help the mayor secure the road south of Eldermill." }
+}

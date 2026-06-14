@@ -6,9 +6,9 @@
  * branch here and a wider Zod union in `balance.schema.ts`.
  */
 
+import type { ExpCurve, StatCurves } from '@data/schemas/balance.schema';
 import type { StatBlock, StatKey } from '@domain/actors/StatBlock';
 
-import type { ExpCurve, StatCurves } from '@data/schemas/balance.schema';
 
 export interface LevelUpAward {
   readonly fromLevel: number;

@@ -1,6 +1,6 @@
+import type { Item } from '@data/schemas/item.schema';
 import { describe, expect, it } from 'vitest';
 
-import type { Item } from '@data/schemas/item.schema';
 
 import { Inventory } from './Inventory';
 

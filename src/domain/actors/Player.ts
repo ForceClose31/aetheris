@@ -5,14 +5,13 @@
  * authoritative source for state (level, EXP, stats, points, current vital pools).
  */
 
+import type { ExpCurve, PlayerBase, StatCurves } from '@data/schemas/balance.schema';
 import { applyExp, applyStatGrowth, type ApplyExpResult, type LevelState } from
   '@systems/leveling/Leveling';
 
-import type { ExpCurve, PlayerBase, StatCurves } from '@data/schemas/balance.schema';
 
 import { computeDerivedStats, type DerivedStats } from './DerivedStats';
 import { applyAllModifiers, type Modifier } from './Modifier';
-
 import type { StatBlock } from './StatBlock';
 
 export interface PlayerSnapshot {

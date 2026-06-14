@@ -8,7 +8,6 @@
  */
 
 import type { Rng } from '@core/Rng';
-
 import type { LootEntry, LootTable } from '@data/schemas/loot_table.schema';
 
 export interface LootResultEntry {

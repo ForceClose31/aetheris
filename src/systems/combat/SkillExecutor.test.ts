@@ -1,13 +1,13 @@
 
 import { Rng } from '@core/Rng';
 import { ContentRegistry } from '@data/registry/ContentRegistry';
+import type { DamageFormula, PlayerBase } from '@data/schemas/balance.schema';
 import { MonsterInstance } from '@domain/actors/MonsterInstance';
 import { Player } from '@domain/actors/Player';
 import { CooldownTracker } from '@systems/combat/CooldownTracker';
 import { SkillExecutor } from '@systems/combat/SkillExecutor';
 import { describe, expect, it } from 'vitest';
 
-import type { DamageFormula, PlayerBase } from '@data/schemas/balance.schema';
 
 const playerBase: PlayerBase = {
   id: 'balance.player_base',
@@ -105,6 +105,11 @@ const buildRegistry = (): ContentRegistry => {
         entries: [{ kind: 'nothing', weight: 1 }],
       },
     },
+    regions: {},
+    maps: {},
+    npcs: {},
+    dialogues: {},
+    quests: {},
   });
   if (!result.ok) {
     throw new Error('test registry failed: ' + result.error.map((e) => e.message).join('\n'));

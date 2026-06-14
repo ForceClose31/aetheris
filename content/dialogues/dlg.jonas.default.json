@@ -1,0 +1,15 @@
+{
+  "id": "dlg.jonas.default",
+  "start": "greet",
+  "nodes": {
+    "greet": {
+      "kind": "say",
+      "speaker": { "en": "Jonas" },
+      "lines": [
+        { "en": "Mind the door. Stew's on the hearth. Rest if you need to." }
+      ],
+      "next": "end"
+    },
+    "end": { "kind": "end" }
+  }
+}

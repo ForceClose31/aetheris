@@ -1,8 +1,8 @@
+import type { PlayerBase } from '@data/schemas/balance.schema';
+import type { Item } from '@data/schemas/item.schema';
 import { Player } from '@domain/actors/Player';
 import { describe, expect, it } from 'vitest';
 
-import type { PlayerBase } from '@data/schemas/balance.schema';
-import type { Item } from '@data/schemas/item.schema';
 
 import { Equipment } from './Equipment';
 

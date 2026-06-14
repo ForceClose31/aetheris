@@ -1,0 +1,8 @@
+{
+  "id": "reg.beginner_plains",
+  "name": { "en": "Beginner Plains" },
+  "levelRange": [1, 10],
+  "mapIds": ["map.plains.eldermill", "map.plains.field_north", "map.plains.field_south", "map.plains.cave"],
+  "hubMapId": "map.plains.eldermill",
+  "description": "Rolling fields ringing the village of Eldermill."
+}

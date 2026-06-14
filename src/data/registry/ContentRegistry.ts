@@ -3,9 +3,10 @@
  *
  * Phase 0 shipped Item.
  * Phase 1 added the Balance bundle.
- * Phase 2 adds Skill, StatusEffect, Monster, and LootTable. Cross-reference checks
- * run after schema validation to catch dangling ids (e.g. monster references a
- * loot table that does not exist).
+ * Phase 2 added Skill, StatusEffect, Monster, LootTable.
+ * Phase 3 adds Region, Map, Npc, Dialogue, Quest. Cross-reference checks expand
+ * to validate map.exits[].to.mapId, map.npcs[].npcId, npc.dialogueId, npc.shop.itemId,
+ * dialogue.start, quest.objectives.{monsterId,itemId,npcId,mapId}, region.mapIds.
  */
 
 import { getLogger } from '@core/Logger';
@@ -22,9 +23,14 @@ import {
   type PlayerBase,
   type StatCurves,
 } from '../schemas/balance.schema';
+import { DIALOGUE_SCHEMA, type Dialogue } from '../schemas/dialogue.schema';
 import { ITEM_SCHEMA, type Item } from '../schemas/item.schema';
 import { LOOT_TABLE_SCHEMA, type LootTable } from '../schemas/loot_table.schema';
+import { MAP_SCHEMA, type MapDef } from '../schemas/map.schema';
 import { MONSTER_SCHEMA, type Monster } from '../schemas/monster.schema';
+import { NPC_SCHEMA, type Npc } from '../schemas/npc.schema';
+import { QUEST_SCHEMA, type Quest } from '../schemas/quest.schema';
+import { REGION_SCHEMA, type Region } from '../schemas/region.schema';
 import { SKILL_SCHEMA, type Skill } from '../schemas/skill.schema';
 import { STATUS_EFFECT_SCHEMA, type StatusEffect } from '../schemas/status_effect.schema';
 
@@ -34,7 +40,12 @@ export type ContentKind =
   | 'skill'
   | 'status_effect'
   | 'monster'
-  | 'loot_table';
+  | 'loot_table'
+  | 'region'
+  | 'map'
+  | 'npc'
+  | 'dialogue'
+  | 'quest';
 
 export interface ContentSource {
   readonly items: Readonly<Record<string, unknown>>;
@@ -43,6 +54,11 @@ export interface ContentSource {
   readonly statusEffects: Readonly<Record<string, unknown>>;
   readonly monsters: Readonly<Record<string, unknown>>;
   readonly lootTables: Readonly<Record<string, unknown>>;
+  readonly regions: Readonly<Record<string, unknown>>;
+  readonly maps: Readonly<Record<string, unknown>>;
+  readonly npcs: Readonly<Record<string, unknown>>;
+  readonly dialogues: Readonly<Record<string, unknown>>;
+  readonly quests: Readonly<Record<string, unknown>>;
 }
 
 export interface ValidationReport {
@@ -73,6 +89,11 @@ export class ContentRegistry {
   private readonly statusEffects = new Map<string, StatusEffect>();
   private readonly monsters = new Map<string, Monster>();
   private readonly lootTables = new Map<string, LootTable>();
+  private readonly regions = new Map<string, Region>();
+  private readonly maps = new Map<string, MapDef>();
+  private readonly npcs = new Map<string, Npc>();
+  private readonly dialogues = new Map<string, Dialogue>();
+  private readonly quests = new Map<string, Quest>();
   private balance: BalanceBundle | null = null;
   private loaded = false;
   private readonly log = getLogger('ContentRegistry');
@@ -81,12 +102,17 @@ export class ContentRegistry {
     this.reset();
     const errors: ValidationError[] = [];
 
-    this.loadItems(source.items, errors);
+    this.loadKind(source.items, ITEM_SCHEMA, 'item', this.items, errors);
     const balance = this.loadBalance(source.balance, errors);
-    this.loadStatusEffects(source.statusEffects, errors);
-    this.loadSkills(source.skills, errors);
-    this.loadLootTables(source.lootTables, errors);
-    this.loadMonsters(source.monsters, errors);
+    this.loadKind(source.statusEffects, STATUS_EFFECT_SCHEMA, 'status_effect', this.statusEffects, errors);
+    this.loadKind(source.skills, SKILL_SCHEMA, 'skill', this.skills, errors);
+    this.loadKind(source.lootTables, LOOT_TABLE_SCHEMA, 'loot_table', this.lootTables, errors);
+    this.loadKind(source.monsters, MONSTER_SCHEMA, 'monster', this.monsters, errors);
+    this.loadKind(source.dialogues, DIALOGUE_SCHEMA, 'dialogue', this.dialogues, errors);
+    this.loadKind(source.npcs, NPC_SCHEMA, 'npc', this.npcs, errors);
+    this.loadKind(source.maps, MAP_SCHEMA, 'map', this.maps, errors);
+    this.loadKind(source.regions, REGION_SCHEMA, 'region', this.regions, errors);
+    this.loadKind(source.quests, QUEST_SCHEMA, 'quest', this.quests, errors);
 
     if (errors.length === 0) {
       this.crossReferenceCheck(errors);
@@ -105,9 +131,14 @@ export class ContentRegistry {
       status_effect: this.statusEffects.size,
       monster: this.monsters.size,
       loot_table: this.lootTables.size,
+      region: this.regions.size,
+      map: this.maps.size,
+      npc: this.npcs.size,
+      dialogue: this.dialogues.size,
+      quest: this.quests.size,
     };
     this.log.info(
-      `content loaded: ${counts.item} items, ${counts.skill} skills, ${counts.status_effect} status, ${counts.monster} monsters, ${counts.loot_table} loot tables`,
+      `content loaded: ${counts.item} items, ${counts.skill} skills, ${counts.status_effect} status, ${counts.monster} monsters, ${counts.loot_table} loot tables, ${counts.region} regions, ${counts.map} maps, ${counts.npc} npcs, ${counts.dialogue} dialogues, ${counts.quest} quests`,
     );
     return ok({ errors: [], counts });
   }
@@ -118,136 +149,47 @@ export class ContentRegistry {
     this.statusEffects.clear();
     this.monsters.clear();
     this.lootTables.clear();
+    this.regions.clear();
+    this.maps.clear();
+    this.npcs.clear();
+    this.dialogues.clear();
+    this.quests.clear();
     this.balance = null;
     this.loaded = false;
   }
 
-  private loadItems(
-    items: Readonly<Record<string, unknown>>,
-    errors: ValidationError[],
-  ): void {
-    for (const [id, raw] of Object.entries(items)) {
-      const v = validate(ITEM_SCHEMA, raw, `item:${id}`);
-      if (!v.ok) {
-        errors.push(v.error);
-        continue;
-      }
-      if (v.value.id !== id) {
-        errors.push(
-          issue(
-            `item:${id}`,
-            'id',
-            'id_mismatch',
-            `Item key "${id}" does not match id "${v.value.id}"`,
-          ),
-        );
-        continue;
-      }
-      if (this.items.has(v.value.id)) {
-        errors.push(issue(`item:${id}`, 'id', 'duplicate_id', `Duplicate item id "${v.value.id}"`));
-        continue;
-      }
-      this.items.set(v.value.id, v.value);
-    }
-  }
-
-  private loadStatusEffects(
+  private loadKind<T extends { id: string }>(
     src: Readonly<Record<string, unknown>>,
+    schema: Parameters<typeof validate>[0],
+    tag: string,
+    target: Map<string, T>,
     errors: ValidationError[],
   ): void {
     for (const [id, raw] of Object.entries(src)) {
-      const v = validate(STATUS_EFFECT_SCHEMA, raw, `status_effect:${id}`);
+      const v = validate(schema, raw, `${tag}:${id}`);
       if (!v.ok) {
         errors.push(v.error);
         continue;
       }
-      if (v.value.id !== id) {
+      const value = v.value as T;
+      if (value.id !== id) {
         errors.push(
           issue(
-            `status_effect:${id}`,
+            `${tag}:${id}`,
             'id',
             'id_mismatch',
-            `Status effect key "${id}" does not match id "${v.value.id}"`,
+            `${tag} key "${id}" does not match id "${value.id}"`,
           ),
         );
         continue;
       }
-      this.statusEffects.set(v.value.id, v.value);
-    }
-  }
-
-  private loadSkills(
-    src: Readonly<Record<string, unknown>>,
-    errors: ValidationError[],
-  ): void {
-    for (const [id, raw] of Object.entries(src)) {
-      const v = validate(SKILL_SCHEMA, raw, `skill:${id}`);
-      if (!v.ok) {
-        errors.push(v.error);
-        continue;
-      }
-      if (v.value.id !== id) {
+      if (target.has(value.id)) {
         errors.push(
-          issue(
-            `skill:${id}`,
-            'id',
-            'id_mismatch',
-            `Skill key "${id}" does not match id "${v.value.id}"`,
-          ),
+          issue(`${tag}:${id}`, 'id', 'duplicate_id', `Duplicate ${tag} id "${value.id}"`),
         );
         continue;
       }
-      this.skills.set(v.value.id, v.value);
-    }
-  }
-
-  private loadLootTables(
-    src: Readonly<Record<string, unknown>>,
-    errors: ValidationError[],
-  ): void {
-    for (const [id, raw] of Object.entries(src)) {
-      const v = validate(LOOT_TABLE_SCHEMA, raw, `loot_table:${id}`);
-      if (!v.ok) {
-        errors.push(v.error);
-        continue;
-      }
-      if (v.value.id !== id) {
-        errors.push(
-          issue(
-            `loot_table:${id}`,
-            'id',
-            'id_mismatch',
-            `Loot table key "${id}" does not match id "${v.value.id}"`,
-          ),
-        );
-        continue;
-      }
-      this.lootTables.set(v.value.id, v.value);
-    }
-  }
-
-  private loadMonsters(
-    src: Readonly<Record<string, unknown>>,
-    errors: ValidationError[],
-  ): void {
-    for (const [id, raw] of Object.entries(src)) {
-      const v = validate(MONSTER_SCHEMA, raw, `monster:${id}`);
-      if (!v.ok) {
-        errors.push(v.error);
-        continue;
-      }
-      if (v.value.id !== id) {
-        errors.push(
-          issue(
-            `monster:${id}`,
-            'id',
-            'id_mismatch',
-            `Monster key "${id}" does not match id "${v.value.id}"`,
-          ),
-        );
-        continue;
-      }
-      this.monsters.set(v.value.id, v.value);
+      target.set(value.id, value);
     }
   }
 
@@ -273,12 +215,7 @@ export class ContentRegistry {
       for (const sid of m.skills) {
         if (!this.skills.has(sid)) {
           errors.push(
-            issue(
-              `monster:${m.id}`,
-              'skills',
-              'unknown_ref',
-              `Monster references unknown skill "${sid}"`,
-            ),
+            issue(`monster:${m.id}`, 'skills', 'unknown_ref', `Monster references unknown skill "${sid}"`),
           );
         }
       }
@@ -304,6 +241,182 @@ export class ContentRegistry {
               'entries.itemId',
               'unknown_ref',
               `Loot table references unknown item "${entry.itemId}"`,
+            ),
+          );
+        }
+      }
+    }
+
+    // Maps -> Maps (exits), NPCs (placements), Monsters (spawn)
+    for (const m of this.maps.values()) {
+      for (const ex of m.exits) {
+        const dest = this.maps.get(ex.to.mapId);
+        if (dest === undefined) {
+          errors.push(
+            issue(
+              `map:${m.id}`,
+              `exits.${ex.id}.to.mapId`,
+              'unknown_ref',
+              `Map exit "${ex.id}" references unknown map "${ex.to.mapId}"`,
+            ),
+          );
+          continue;
+        }
+        if (!dest.spawns.some((s) => s.id === ex.to.marker)) {
+          errors.push(
+            issue(
+              `map:${m.id}`,
+              `exits.${ex.id}.to.marker`,
+              'unknown_ref',
+              `Map exit "${ex.id}" references unknown marker "${ex.to.marker}" on "${ex.to.mapId}"`,
+            ),
+          );
+        }
+      }
+      for (const placement of m.npcs) {
+        if (!this.npcs.has(placement.npcId)) {
+          errors.push(
+            issue(
+              `map:${m.id}`,
+              'npcs.npcId',
+              'unknown_ref',
+              `Map references unknown npc "${placement.npcId}"`,
+            ),
+          );
+        }
+      }
+      for (const spawn of m.monsters) {
+        if (!this.monsters.has(spawn.monsterId)) {
+          errors.push(
+            issue(
+              `map:${m.id}`,
+              'monsters.monsterId',
+              'unknown_ref',
+              `Map references unknown monster "${spawn.monsterId}"`,
+            ),
+          );
+        }
+      }
+    }
+
+    // NPCs -> Dialogues, Items (shop)
+    for (const npc of this.npcs.values()) {
+      if (!this.dialogues.has(npc.dialogueId)) {
+        errors.push(
+          issue(
+            `npc:${npc.id}`,
+            'dialogueId',
+            'unknown_ref',
+            `NPC references unknown dialogue "${npc.dialogueId}"`,
+          ),
+        );
+      }
+      for (const sched of npc.schedule) {
+        if (!this.maps.has(sched.mapId)) {
+          errors.push(
+            issue(
+              `npc:${npc.id}`,
+              'schedule.mapId',
+              'unknown_ref',
+              `NPC schedule references unknown map "${sched.mapId}"`,
+            ),
+          );
+        }
+        if (sched.dialogueId !== undefined && !this.dialogues.has(sched.dialogueId)) {
+          errors.push(
+            issue(
+              `npc:${npc.id}`,
+              'schedule.dialogueId',
+              'unknown_ref',
+              `NPC schedule references unknown dialogue "${sched.dialogueId}"`,
+            ),
+          );
+        }
+      }
+      if (npc.shop !== undefined) {
+        for (const stock of npc.shop.sells) {
+          if (!this.items.has(stock.itemId)) {
+            errors.push(
+              issue(
+                `npc:${npc.id}`,
+                'shop.sells.itemId',
+                'unknown_ref',
+                `NPC shop references unknown item "${stock.itemId}"`,
+              ),
+            );
+          }
+        }
+      }
+    }
+
+    // Regions -> Maps
+    for (const r of this.regions.values()) {
+      for (const mid of r.mapIds) {
+        if (!this.maps.has(mid)) {
+          errors.push(
+            issue(
+              `region:${r.id}`,
+              'mapIds',
+              'unknown_ref',
+              `Region references unknown map "${mid}"`,
+            ),
+          );
+        }
+      }
+    }
+
+    // Quests -> Monsters / Items / NPCs / Maps
+    for (const q of this.quests.values()) {
+      for (const obj of q.objectives) {
+        if (obj.kind === 'kill' && !this.monsters.has(obj.monsterId)) {
+          errors.push(
+            issue(
+              `quest:${q.id}`,
+              'objectives.monsterId',
+              'unknown_ref',
+              `Quest references unknown monster "${obj.monsterId}"`,
+            ),
+          );
+        }
+        if (obj.kind === 'collect' && !this.items.has(obj.itemId)) {
+          errors.push(
+            issue(
+              `quest:${q.id}`,
+              'objectives.itemId',
+              'unknown_ref',
+              `Quest references unknown item "${obj.itemId}"`,
+            ),
+          );
+        }
+        if (obj.kind === 'talk' && !this.npcs.has(obj.npcId)) {
+          errors.push(
+            issue(
+              `quest:${q.id}`,
+              'objectives.npcId',
+              'unknown_ref',
+              `Quest references unknown npc "${obj.npcId}"`,
+            ),
+          );
+        }
+        if (obj.kind === 'reach' && !this.maps.has(obj.mapId)) {
+          errors.push(
+            issue(
+              `quest:${q.id}`,
+              'objectives.mapId',
+              'unknown_ref',
+              `Quest references unknown map "${obj.mapId}"`,
+            ),
+          );
+        }
+      }
+      for (const r of q.rewards.items) {
+        if (!this.items.has(r.itemId)) {
+          errors.push(
+            issue(
+              `quest:${q.id}`,
+              'rewards.items.itemId',
+              'unknown_ref',
+              `Quest reward references unknown item "${r.itemId}"`,
             ),
           );
         }
@@ -445,6 +558,70 @@ export class ContentRegistry {
       throw new Error(`ContentRegistry: loot table "${id}" not found`);
     }
     return v;
+  }
+
+  getRegion(id: string): Region | undefined {
+    return this.regions.get(id);
+  }
+  requireRegion(id: string): Region {
+    const v = this.regions.get(id);
+    if (v === undefined) {
+      throw new Error(`ContentRegistry: region "${id}" not found`);
+    }
+    return v;
+  }
+  listRegions(): Region[] {
+    return [...this.regions.values()];
+  }
+
+  getMap(id: string): MapDef | undefined {
+    return this.maps.get(id);
+  }
+  requireMap(id: string): MapDef {
+    const v = this.maps.get(id);
+    if (v === undefined) {
+      throw new Error(`ContentRegistry: map "${id}" not found`);
+    }
+    return v;
+  }
+  listMaps(): MapDef[] {
+    return [...this.maps.values()];
+  }
+
+  getNpc(id: string): Npc | undefined {
+    return this.npcs.get(id);
+  }
+  requireNpc(id: string): Npc {
+    const v = this.npcs.get(id);
+    if (v === undefined) {
+      throw new Error(`ContentRegistry: npc "${id}" not found`);
+    }
+    return v;
+  }
+
+  getDialogue(id: string): Dialogue | undefined {
+    return this.dialogues.get(id);
+  }
+  requireDialogue(id: string): Dialogue {
+    const v = this.dialogues.get(id);
+    if (v === undefined) {
+      throw new Error(`ContentRegistry: dialogue "${id}" not found`);
+    }
+    return v;
+  }
+
+  getQuest(id: string): Quest | undefined {
+    return this.quests.get(id);
+  }
+  requireQuest(id: string): Quest {
+    const v = this.quests.get(id);
+    if (v === undefined) {
+      throw new Error(`ContentRegistry: quest "${id}" not found`);
+    }
+    return v;
+  }
+  listQuests(): Quest[] {
+    return [...this.quests.values()];
   }
 
   getBalance(): BalanceBundle {

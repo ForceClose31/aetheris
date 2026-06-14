@@ -1,7 +1,7 @@
+import type { Monster } from '@data/schemas/monster.schema';
 import { MonsterInstance } from '@domain/actors/MonsterInstance';
 import { describe, expect, it } from 'vitest';
 
-import type { Monster } from '@data/schemas/monster.schema';
 
 import { BasicAi, DEFAULT_AI_TUNING } from './BasicAi';
 

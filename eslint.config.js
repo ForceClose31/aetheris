@@ -54,7 +54,6 @@ export default [
             'parent',
             'sibling',
             'index',
-            'type',
           ],
           pathGroups: [
             { pattern: '@core/**', group: 'internal', position: 'before' },

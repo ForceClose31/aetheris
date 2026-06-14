@@ -1,0 +1,18 @@
+{
+  "id": "npc.marn",
+  "name": { "en": "Marn the Merchant" },
+  "dialogueId": "dlg.marn.default",
+  "shop": {
+    "sells": [
+      { "itemId": "csm.minor_potion", "price": 8, "stock": -1 },
+      { "itemId": "arm.leather_vest", "price": 24, "stock": 1 }
+    ],
+    "buybackMultiplier": 0.5
+  },
+  "schedule": [
+    { "fromHour": 7, "toHour": 19, "mapId": "map.plains.eldermill", "pos": [16, 5] },
+    { "fromHour": 19, "toHour": 7, "mapId": "map.plains.eldermill", "pos": [3, 4] }
+  ],
+  "placeholderColor": "ffd87a",
+  "description": "Runs the Eldermill general store."
+}

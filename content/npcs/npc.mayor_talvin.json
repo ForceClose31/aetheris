@@ -1,0 +1,11 @@
+{
+  "id": "npc.mayor_talvin",
+  "name": { "en": "Mayor Talvin" },
+  "dialogueId": "dlg.mayor.default",
+  "schedule": [
+    { "fromHour": 7, "toHour": 18, "mapId": "map.plains.eldermill", "pos": [9, 8] },
+    { "fromHour": 18, "toHour": 7, "mapId": "map.plains.eldermill", "pos": [3, 4] }
+  ],
+  "placeholderColor": "c0a0ff",
+  "description": "Eldermill's hand-wringing mayor."
+}

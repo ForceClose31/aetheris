@@ -1,0 +1,11 @@
+{
+  "id": "npc.brann",
+  "name": { "en": "Old Brann" },
+  "dialogueId": "dlg.brann.default",
+  "schedule": [
+    { "fromHour": 8, "toHour": 20, "mapId": "map.plains.eldermill", "pos": [16, 13] },
+    { "fromHour": 20, "toHour": 8, "mapId": "map.plains.eldermill", "pos": [3, 4] }
+  ],
+  "placeholderColor": "c69060",
+  "description": "The village blacksmith."
+}

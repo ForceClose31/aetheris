@@ -1,0 +1,36 @@
+{
+  "id": "dlg.marn.default",
+  "start": "greet",
+  "nodes": {
+    "greet": {
+      "kind": "say",
+      "speaker": { "en": "Marn" },
+      "lines": [
+        { "en": "Welcome! Travelers' supplies, fair prices." }
+      ],
+      "next": "menu"
+    },
+    "menu": {
+      "kind": "choice",
+      "speaker": { "en": "Marn" },
+      "prompt": { "en": "Browsing?" },
+      "options": [
+        { "label": { "en": "Show me your wares (shop)." }, "next": "open_shop" },
+        { "label": { "en": "Just looking around." }, "next": "bye" }
+      ]
+    },
+    "open_shop": {
+      "kind": "end",
+      "setFlags": [{ "flag": "ui.open_shop", "set": "npc.marn" }]
+    },
+    "bye": {
+      "kind": "say",
+      "speaker": { "en": "Marn" },
+      "lines": [{ "en": "Safe roads, friend." }],
+      "next": "end"
+    },
+    "end": {
+      "kind": "end"
+    }
+  }
+}

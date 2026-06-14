@@ -1,8 +1,7 @@
 import { Rng } from '@core/Rng';
-import { describe, expect, it } from 'vitest';
-
 import type { DamageFormula } from '@data/schemas/balance.schema';
 import type { Skill } from '@data/schemas/skill.schema';
+import { describe, expect, it } from 'vitest';
 
 import { computeDamage } from './Damage';
 

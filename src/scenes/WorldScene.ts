@@ -1,48 +1,58 @@
 /**
  * WorldScene - the gameplay scene.
  *
- * Phase 2 ships the combat MVP:
- *   - Movement (Phase 1) preserved.
- *   - 2 monster types spawning periodically (slime, goblin scout).
- *   - Skill 1: basic slash (melee).
- *   - Skill 2: firebolt (ranged, may apply Burn).
- *   - Loot popups, gold pickup auto, item pickup auto-into-Inventory.
- *   - HudScene shows skill cooldowns and gold.
- *   - Death/respawn for the player.
+ * Phase 3 ships data-driven map loading:
+ *   - Loads the current MapDef from ContentRegistry; rebuilds tiles, NPCs, monster spawns.
+ *   - Player movement honors tile collisions.
+ *   - Map exits transition between maps; NPC interaction opens DialogueScene.
+ *   - Day/night overlay tracks the WorldClock.
+ *   - Quest progression hooks: monster.killed, npc.talked, map.entered.
  */
 
+
 import { getLogger } from '@core/Logger';
-import { getRootLocator } from '@core/ServiceLocator';
-import { MonsterInstance } from '@domain/actors/MonsterInstance';
-import { BasicAi, DEFAULT_AI_TUNING } from '@systems/ai/BasicAi';
-import { rollLoot } from '@systems/loot/Loot';
-import Phaser from 'phaser';
-
 import type { Rng } from '@core/Rng';
-
-
-import type { CooldownTracker } from '@systems/combat/CooldownTracker';
-import type { SkillExecutor } from '@systems/combat/SkillExecutor';
-import type { InputManager } from '@systems/input/InputManager';
-
+import { getRootLocator } from '@core/ServiceLocator';
+import type { WorldClock, WorldDate } from '@core/Time';
+import type { ContentRegistry } from '@data/registry/ContentRegistry';
+import type { MapDef } from '@data/schemas/map.schema';
+import type { Monster } from '@data/schemas/monster.schema';
+import type { Npc } from '@data/schemas/npc.schema';
+import { MonsterInstance } from '@domain/actors/MonsterInstance';
 import type { Player } from '@domain/actors/Player';
 import type { Inventory } from '@domain/inventory/Inventory';
-
-import type { ContentRegistry } from '@data/registry/ContentRegistry';
-import type { LootTable } from '@data/schemas/loot_table.schema';
-import type { Monster } from '@data/schemas/monster.schema';
-
-
-
+import { BasicAi, DEFAULT_AI_TUNING } from '@systems/ai/BasicAi';
+import type { CooldownTracker } from '@systems/combat/CooldownTracker';
+import type { SkillExecutor } from '@systems/combat/SkillExecutor';
+import type { WorldFlags } from '@systems/flags/WorldFlags';
+import type { InputManager } from '@systems/input/InputManager';
+import { rollLoot } from '@systems/loot/Loot';
+import { resolveNpcSlot } from '@systems/npc/ScheduleResolver';
+import type { QuestSystem } from '@systems/quest/QuestSystem';
+import {
+  isWalkableTile,
+  mapPixelHeight,
+  mapPixelWidth,
+  tileToWorld,
+} from '@systems/world/TileGrid';
+import type { WorldState } from '@systems/world/WorldState';
+import Phaser from 'phaser';
 
 import { TOKENS } from './BootScene';
 
 const PLAYER_SIZE = 12;
 const PLAYER_SPEED_BASE = 90;
 const SPAWN_INTERVAL_MS = 4000;
-const MAX_MONSTERS = 4;
-const PLAYER_HIT_RANGE = 22;
-const ATTACK_PRESS_COOLDOWN_MS = 100;
+const INTERACT_RANGE = 22;
+
+const TILE_COLORS: Record<number, number> = {
+  0: 0x202028,
+  1: 0x3a3a44,
+  2: 0x6a4a30,
+  3: 0x3060a0,
+  4: 0x6a5a40,
+  5: 0x2a4a2a,
+};
 
 interface MonsterEntity {
   readonly instance: MonsterInstance;
@@ -50,8 +60,14 @@ interface MonsterEntity {
   readonly sprite: Phaser.GameObjects.Rectangle;
   readonly hpBar: Phaser.GameObjects.Rectangle;
   readonly hpBarBg: Phaser.GameObjects.Rectangle;
-  readonly attackCooldownKey: string;
   alive: boolean;
+}
+
+interface NpcEntity {
+  readonly npc: Npc;
+  readonly sprite: Phaser.GameObjects.Rectangle;
+  readonly label: Phaser.GameObjects.Text;
+  dialogueId: string;
 }
 
 interface FloatingText {
@@ -75,19 +91,26 @@ export class WorldScene extends Phaser.Scene {
   private cooldowns!: CooldownTracker;
   private executor!: SkillExecutor;
   private rng!: Rng;
+  private flags!: WorldFlags;
+  private quests!: QuestSystem;
+  private worldState!: WorldState;
+  private clock!: WorldClock;
 
+  private mapDef!: MapDef;
+  private mapContainer!: Phaser.GameObjects.Container;
   private playerSprite!: Phaser.GameObjects.Rectangle;
   private playerBody!: Phaser.GameObjects.Rectangle;
-
+  private dayNightOverlay!: Phaser.GameObjects.Rectangle;
   private monsters: MonsterEntity[] = [];
+  private npcs: NpcEntity[] = [];
   private spawnAccumMs = 0;
   private floats: FloatingText[] = [];
   private grounds: GroundLoot[] = [];
   private deathOverlay: Phaser.GameObjects.Text | null = null;
   private respawnTimerMs = 0;
   private hintText!: Phaser.GameObjects.Text;
-  private monsterDefs: Monster[] = [];
-
+  private isDialogueOpen = false;
+  private exitDebounceMs = 0;
   private readonly log = getLogger('WorldScene');
 
   constructor() {
@@ -103,9 +126,14 @@ export class WorldScene extends Phaser.Scene {
     this.cooldowns = locator.get(TOKENS.CooldownTracker);
     this.executor = locator.get(TOKENS.SkillExecutor);
     this.rng = locator.get(TOKENS.Rng).fork('world');
+    this.flags = locator.get(TOKENS.WorldFlags);
+    this.quests = locator.get(TOKENS.QuestSystem);
+    this.worldState = locator.get(TOKENS.WorldState);
+    this.clock = locator.get(TOKENS.WorldClock);
 
-    this.cameras.main.setBackgroundColor('#171720');
-    this.drawTileGrid();
+    this.cameras.main.setBackgroundColor('#0a0a0e');
+
+    this.mapContainer = this.add.container(0, 0);
 
     const { width, height } = this.scale;
     this.playerBody = this.add
@@ -115,31 +143,109 @@ export class WorldScene extends Phaser.Scene {
       .rectangle(width / 2, height / 2 - PLAYER_SIZE / 2 + 1, PLAYER_SIZE - 2, 4, 0xe6e6ec)
       .setStrokeStyle(1, 0x1a1a22);
 
-    this.hintText = this.add
-      .text(
-        width / 2,
-        8,
-        'WASD/Arrows: move    J: slash    K: firebolt    monsters spawn nearby',
-        { fontFamily: 'monospace', fontSize: '6px', color: '#5a5a66' },
-      )
-      .setOrigin(0.5, 0);
+    this.dayNightOverlay = this.add
+      .rectangle(0, 0, width, height, 0x000020, 0)
+      .setOrigin(0, 0)
+      .setDepth(1000);
 
-    this.monsterDefs = this.registry_.listMonsters();
+    this.hintText = this.add
+      .text(width / 2, 8, '', { fontFamily: 'monospace', fontSize: '6px', color: '#5a5a66' })
+      .setOrigin(0.5, 0)
+      .setDepth(1001);
 
     this.bindInput();
     this.scene.launch('Hud');
-    this.log.info(`WorldScene ready, ${this.monsterDefs.length} monster def(s) available`);
+
+    this.loadCurrentMap();
+    this.quests.reevaluate();
   }
 
-  private drawTileGrid(): void {
-    const { width, height } = this.scale;
-    const g = this.add.graphics({ lineStyle: { width: 1, color: 0x222229, alpha: 0.5 } });
-    const tile = 16;
-    for (let x = 0; x <= width; x += tile) {
-      g.lineBetween(x, 0, x, height);
+  private loadCurrentMap(): void {
+    const mapId = this.worldState.getCurrentMapId();
+    const marker = this.worldState.getCurrentSpawnMarker();
+    this.mapDef = this.registry_.requireMap(mapId);
+
+    this.mapContainer.removeAll(true);
+    this.clearMonsters();
+    this.clearNpcs();
+    this.clearGrounds();
+    this.cooldowns.clear();
+    this.spawnAccumMs = 0;
+    this.exitDebounceMs = 250;
+
+    this.drawMapTiles();
+    this.spawnNpcs();
+
+    const spawn = this.mapDef.spawns.find((s) => s.id === marker) ?? this.mapDef.spawns[0];
+    if (spawn !== undefined) {
+      const [x, y] = tileToWorld(this.mapDef, spawn.pos[0], spawn.pos[1]);
+      this.playerBody.x = x;
+      this.playerBody.y = y;
+      this.playerSprite.x = x;
+      this.playerSprite.y = y - PLAYER_SIZE / 2 + 1 - 2;
     }
-    for (let y = 0; y <= height; y += tile) {
-      g.lineBetween(0, y, width, y);
+
+    this.cameras.main.setBounds(0, 0, mapPixelWidth(this.mapDef), mapPixelHeight(this.mapDef));
+    this.cameras.main.startFollow(this.playerBody, true, 1, 1);
+
+    const skill1 = 'skl.basic_slash';
+    const skill2 = 'skl.firebolt';
+    void skill1;
+    void skill2;
+    this.hintText.setText(
+      'WASD: move   J: slash   K: firebolt   E: interact / use door',
+    );
+
+    this.quests.emit({ kind: 'map.entered', id: mapId });
+    this.log.info(`entered map "${mapId}" at "${marker}"`);
+  }
+
+  private drawMapTiles(): void {
+    const ts = this.mapDef.tileSize;
+    for (let r = 0; r < this.mapDef.tiles.length; r++) {
+      const row = this.mapDef.tiles[r];
+      if (row === undefined) {
+        continue;
+      }
+      for (let c = 0; c < row.length; c++) {
+        const code = row[c] ?? 0;
+        const color = TILE_COLORS[code] ?? 0x101018;
+        const tile = this.add
+          .rectangle(c * ts + ts / 2, r * ts + ts / 2, ts - 1, ts - 1, color)
+          .setStrokeStyle(0);
+        this.mapContainer.add(tile);
+      }
+    }
+  }
+
+  private spawnNpcs(): void {
+    const hour = this.clock.now().hour;
+    for (const placement of this.mapDef.npcs) {
+      const npc = this.registry_.getNpc(placement.npcId);
+      if (npc === undefined) {
+        continue;
+      }
+      const slot = resolveNpcSlot(npc, hour);
+      if (slot !== null && slot.mapId !== this.mapDef.id) {
+        continue; // NPC is elsewhere right now
+      }
+      const [col, row] = slot?.pos ?? placement.spawn;
+      const [x, y] = tileToWorld(this.mapDef, col, row);
+      const color = parseInt(npc.placeholderColor, 16);
+      const sprite = this.add.rectangle(x, y, 12, 12, color).setStrokeStyle(1, 0x1a1a22);
+      const label = this.add
+        .text(x, y - 12, npc.name.en, {
+          fontFamily: 'monospace',
+          fontSize: '6px',
+          color: '#aaaab0',
+        })
+        .setOrigin(0.5, 1);
+      this.npcs.push({
+        npc,
+        sprite,
+        label,
+        dialogueId: slot?.dialogueId ?? npc.dialogueId,
+      });
     }
   }
 
@@ -151,8 +257,19 @@ export class WorldScene extends Phaser.Scene {
   }
 
   override update(_time: number, delta: number): void {
+    if (this.isDialogueOpen) {
+      this.input_.endFrame();
+      return;
+    }
+
     const dt = delta / 1000;
     this.cooldowns.update(delta);
+    this.clock.update(delta);
+    this.applyDayNightOverlay(this.clock.now());
+
+    if (this.exitDebounceMs > 0) {
+      this.exitDebounceMs -= delta;
+    }
 
     if (this.player.isDead()) {
       this.tickRespawn(delta);
@@ -162,11 +279,37 @@ export class WorldScene extends Phaser.Scene {
 
     this.handleMovement(dt);
     this.handleCombatInputs();
+    this.handleInteract();
+    this.checkExit();
     this.tickSpawn(delta);
     this.tickMonsters(delta);
     this.tickFloats(delta);
     this.tickGrounds(delta);
     this.input_.endFrame();
+  }
+
+  private applyDayNightOverlay(date: WorldDate): void {
+    if (this.mapDef.indoor) {
+      this.dayNightOverlay.setFillStyle(0x000000, 0);
+      return;
+    }
+    // Smooth tint between hours 18->22 (dusk), 22->6 (night), 6->8 (dawn).
+    const h = date.hour + date.minute / 60;
+    let alpha = 0;
+    let color = 0x00001a;
+    if (h >= 22 || h < 6) {
+      alpha = 0.55;
+      color = 0x00001a;
+    } else if (h >= 18 && h < 22) {
+      alpha = (h - 18) / 4 * 0.55;
+      color = 0x150028;
+    } else if (h >= 6 && h < 8) {
+      alpha = (1 - (h - 6) / 2) * 0.4;
+      color = 0x180a08;
+    } else {
+      alpha = 0;
+    }
+    this.dayNightOverlay.setFillStyle(color, alpha);
   }
 
   private handleMovement(dt: number): void {
@@ -193,26 +336,35 @@ export class WorldScene extends Phaser.Scene {
     dy /= len;
     const derived = this.player.computeDerived();
     const speed = (PLAYER_SPEED_BASE * derived.spd) / 60;
-    const moveX = dx * speed * dt;
-    const moveY = dy * speed * dt;
-    this.playerBody.x += moveX;
-    this.playerBody.y += moveY;
-    this.playerSprite.x += moveX;
-    this.playerSprite.y += moveY;
-    this.clampToScreen();
+    this.tryMovePlayer(dx * speed * dt, 0);
+    this.tryMovePlayer(0, dy * speed * dt);
   }
 
-  private clampToScreen(): void {
-    const { width, height } = this.scale;
-    const half = PLAYER_SIZE / 2;
-    const clampedX = Phaser.Math.Clamp(this.playerBody.x, half, width - half);
-    const clampedY = Phaser.Math.Clamp(this.playerBody.y, half, height - half);
-    const dx = clampedX - this.playerBody.x;
-    const dy = clampedY - this.playerBody.y;
-    this.playerBody.x += dx;
-    this.playerBody.y += dy;
-    this.playerSprite.x += dx;
-    this.playerSprite.y += dy;
+  private tryMovePlayer(dx: number, dy: number): void {
+    const ts = this.mapDef.tileSize;
+    const targetX = this.playerBody.x + dx;
+    const targetY = this.playerBody.y + dy;
+    const half = PLAYER_SIZE / 2 - 1;
+    // Test the four corners of the player's bounding box at the target.
+    const corners: [number, number][] = [
+      [targetX - half, targetY - half],
+      [targetX + half, targetY - half],
+      [targetX - half, targetY + half],
+      [targetX + half, targetY + half],
+    ];
+    for (const [cx, cy] of corners) {
+      const col = Math.floor(cx / ts);
+      const row = Math.floor(cy / ts);
+      if (!isWalkableTile(this.mapDef, col, row)) {
+        return;
+      }
+    }
+    const drift = targetX - this.playerBody.x;
+    const drifty = targetY - this.playerBody.y;
+    this.playerBody.x = targetX;
+    this.playerBody.y = targetY;
+    this.playerSprite.x += drift;
+    this.playerSprite.y += drifty;
   }
 
   private handleCombatInputs(): void {
@@ -223,7 +375,92 @@ export class WorldScene extends Phaser.Scene {
     if (im.wasPressed('attack.heavy')) {
       this.tryCastPlayerSkill('skl.firebolt');
     }
-    void ATTACK_PRESS_COOLDOWN_MS; // reserved for held-attack pacing later.
+  }
+
+  private handleInteract(): void {
+    if (!this.input_.wasPressed('interact')) {
+      return;
+    }
+    const npc = this.findNpcInRange(INTERACT_RANGE);
+    if (npc === null) {
+      return;
+    }
+    this.openDialogue(npc);
+  }
+
+  private openDialogue(npc: NpcEntity): void {
+    this.isDialogueOpen = true;
+    this.scene.launch('Dialogue', {
+      dialogueId: npc.dialogueId,
+      npcId: npc.npc.id,
+      onClose: (result: { flags: Record<string, boolean | number | string>; npcId?: string }) => {
+        this.isDialogueOpen = false;
+        if (result.npcId !== undefined) {
+          this.quests.emit({ kind: 'npc.talked', id: result.npcId });
+        }
+        const shopFlag = result.flags['ui.open_shop'];
+        if (typeof shopFlag === 'string') {
+          this.openShopFor(shopFlag);
+          this.flags.delete('ui.open_shop');
+        }
+        this.quests.reevaluate();
+      },
+    });
+  }
+
+  private openShopFor(npcId: string): void {
+    const npc = this.registry_.getNpc(npcId);
+    if (npc === undefined || npc.shop === undefined) {
+      return;
+    }
+    // Phase 3 shop UI is a quick "auto-buy first stock" stub.
+    // A proper UI lands in a UI-pass phase. For now we just announce.
+    const lines = npc.shop.sells.map((s) => {
+      const item = this.registry_.getItem(s.itemId);
+      return `${item?.name.en ?? s.itemId} - ${s.price ?? '?'}g`;
+    });
+    this.spawnFloat(this.playerBody.x, this.playerBody.y - 16, lines.join(' / '), '#ffd87a');
+  }
+
+  private findNpcInRange(range: number): NpcEntity | null {
+    let best: { e: NpcEntity; d: number } | null = null;
+    for (const e of this.npcs) {
+      const d = Phaser.Math.Distance.Between(
+        this.playerBody.x,
+        this.playerBody.y,
+        e.sprite.x,
+        e.sprite.y,
+      );
+      if (d <= range && (best === null || d < best.d)) {
+        best = { e, d };
+      }
+    }
+    return best?.e ?? null;
+  }
+
+  private checkExit(): void {
+    if (this.exitDebounceMs > 0) {
+      return;
+    }
+    const ts = this.mapDef.tileSize;
+    const col = Math.floor(this.playerBody.x / ts);
+    const row = Math.floor(this.playerBody.y / ts);
+    for (const ex of this.mapDef.exits) {
+      const [rx, ry, rw, rh] = ex.rect;
+      if (col >= rx && col < rx + rw && row >= ry && row < ry + rh) {
+        if (ex.requireFlags.length > 0) {
+          const ok = ex.requireFlags.every((f) => this.flags.has(f));
+          if (!ok) {
+            this.spawnFloat(this.playerBody.x, this.playerBody.y - 14, 'locked', '#aa8888');
+            return;
+          }
+        }
+        if (this.worldState.transitionTo(ex.to.mapId, ex.to.marker)) {
+          this.loadCurrentMap();
+        }
+        return;
+      }
+    }
   }
 
   private tryCastPlayerSkill(skillId: string): void {
@@ -238,7 +475,7 @@ export class WorldScene extends Phaser.Scene {
           ? skill.shape.range
           : skill.shape.kind === 'aoe'
             ? skill.shape.radius
-            : PLAYER_HIT_RANGE;
+            : INTERACT_RANGE;
 
     const targets = this.findTargetsInRange(range);
     if (targets.length === 0) {
@@ -262,7 +499,7 @@ export class WorldScene extends Phaser.Scene {
       ent.sprite.setFillStyle(0xffaaaa);
       this.time.delayedCall(80, () => {
         if (ent.alive) {
-          ent.sprite.setFillStyle(0xa44a4a);
+          ent.sprite.setFillStyle(this.monsterColor(ent.instance.def));
         }
       });
       if (r.target.isDead()) {
@@ -309,13 +546,12 @@ export class WorldScene extends Phaser.Scene {
     return this.monsters.find((m) => m.instance === instance) ?? null;
   }
 
+  private monsterColor(def: Monster): number {
+    return def.family === 'slime' ? 0x6acc7a : 0xc6a06a;
+  }
+
   private tickSpawn(deltaMs: number): void {
-    if (this.monsterDefs.length === 0) {
-      return;
-    }
-    const alive = this.monsters.filter((m) => m.alive).length;
-    if (alive >= MAX_MONSTERS) {
-      this.spawnAccumMs = 0;
+    if (this.mapDef.monsters.length === 0) {
       return;
     }
     this.spawnAccumMs += deltaMs;
@@ -323,33 +559,54 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
     this.spawnAccumMs = 0;
-    this.spawnMonster();
+    // Pick a spawn entry whose maxConcurrent is not yet reached.
+    const eligible = this.mapDef.monsters.filter((s) => {
+      const active = this.monsters.filter(
+        (m) => m.alive && m.instance.def.id === s.monsterId,
+      ).length;
+      return active < s.maxConcurrent;
+    });
+    if (eligible.length === 0) {
+      return;
+    }
+    const entry = this.rng.weightedPick(
+      eligible.map((e) => ({ value: e, weight: e.weight })),
+    );
+    const def = this.registry_.getMonster(entry.monsterId);
+    if (def === undefined) {
+      return;
+    }
+    this.spawnMonster(def);
   }
 
-  private spawnMonster(): void {
-    const def = this.rng.pick(this.monsterDefs);
+  private spawnMonster(def: Monster): void {
     const level = this.rng.int(def.levelRange[0], def.levelRange[1]);
     const inst = new MonsterInstance(def, level);
-    const { width, height } = this.scale;
-    // Spawn at a random edge.
+    const w = mapPixelWidth(this.mapDef);
+    const h = mapPixelHeight(this.mapDef);
     let x = 0;
     let y = 0;
-    const edge = this.rng.int(0, 3);
-    if (edge === 0) {
-      x = this.rng.int(8, width - 8);
-      y = 8;
-    } else if (edge === 1) {
-      x = this.rng.int(8, width - 8);
-      y = height - 8;
-    } else if (edge === 2) {
-      x = 8;
-      y = this.rng.int(8, height - 8);
-    } else {
-      x = width - 8;
-      y = this.rng.int(8, height - 8);
+    // Random walkable tile away from player.
+    for (let attempt = 0; attempt < 24; attempt++) {
+      const col = this.rng.int(1, (this.mapDef.tiles[0]?.length ?? 1) - 2);
+      const row = this.rng.int(1, this.mapDef.tiles.length - 2);
+      if (!isWalkableTile(this.mapDef, col, row)) {
+        continue;
+      }
+      const [px, py] = tileToWorld(this.mapDef, col, row);
+      const dist = Phaser.Math.Distance.Between(this.playerBody.x, this.playerBody.y, px, py);
+      if (dist > 40) {
+        x = px;
+        y = py;
+        break;
+      }
+    }
+    if (x === 0 && y === 0) {
+      x = w - 16;
+      y = h - 16;
     }
 
-    const color = def.family === 'slime' ? 0x6acc7a : 0xc6a06a;
+    const color = this.monsterColor(def);
     const size = def.size === 'S' ? 10 : def.size === 'L' ? 16 : 12;
     const sprite = this.add.rectangle(x, y, size, size, color).setStrokeStyle(1, 0x1a1a22);
     const hpBarBg = this.add.rectangle(x, y - size / 2 - 4, size, 2, 0x222229).setOrigin(0.5);
@@ -363,17 +620,8 @@ export class WorldScene extends Phaser.Scene {
       aggroRange: 64,
       speed: 30 + inst.getStats().spd * 0.4,
     };
-
     const ai = new BasicAi(inst, tuning);
-    this.monsters.push({
-      instance: inst,
-      ai,
-      sprite,
-      hpBar,
-      hpBarBg,
-      attackCooldownKey: `mon_atk_${this.monsters.length}`,
-      alive: true,
-    });
+    this.monsters.push({ instance: inst, ai, sprite, hpBar, hpBarBg, alive: true });
   }
 
   private tickMonsters(deltaMs: number): void {
@@ -382,7 +630,6 @@ export class WorldScene extends Phaser.Scene {
       if (!m.alive) {
         continue;
       }
-
       const dotEvents = m.instance.update(deltaMs);
       for (const ev of dotEvents) {
         m.instance.damage(ev.damage);
@@ -394,7 +641,6 @@ export class WorldScene extends Phaser.Scene {
         this.handleMonsterDeath(m);
         continue;
       }
-
       const distance = Phaser.Math.Distance.Between(
         this.playerBody.x,
         this.playerBody.y,
@@ -408,10 +654,8 @@ export class WorldScene extends Phaser.Scene {
         canAttack: !m.instance.isOnCooldown(m.instance.def.skills[0] ?? ''),
         deltaMs,
       });
-
       if (out.moveTowardPlayer !== 0 && distance > 0.001) {
-        const tuning = DEFAULT_AI_TUNING;
-        const speed = tuning.speed + m.instance.getStats().spd * 0.3;
+        const speed = DEFAULT_AI_TUNING.speed + m.instance.getStats().spd * 0.3;
         const dx = (this.playerBody.x - m.sprite.x) / distance;
         const dy = (this.playerBody.y - m.sprite.y) / distance;
         const moveX = dx * speed * dt * out.moveTowardPlayer;
@@ -423,11 +667,9 @@ export class WorldScene extends Phaser.Scene {
         m.hpBarBg.x += moveX;
         m.hpBarBg.y += moveY;
       }
-
       if (out.attack) {
         this.monsterAttackPlayer(m);
       }
-
       const ratio = Math.max(0, m.instance.getHp() / m.instance.getStats().hp);
       m.hpBar.width = m.hpBarBg.width * ratio;
     }
@@ -445,7 +687,6 @@ export class WorldScene extends Phaser.Scene {
     if (skill === undefined) {
       return;
     }
-
     const playerDerived = this.player.computeDerived();
     const stats = m.instance.getStats();
     const offense = stats.atk;
@@ -456,7 +697,6 @@ export class WorldScene extends Phaser.Scene {
     this.player.damage(dmg);
     this.spawnFloat(this.playerBody.x, this.playerBody.y - 14, `-${dmg}`, '#ff8080');
     m.instance.startCooldown(skillId, skill.cost.cooldownMs);
-
     if (this.player.isDead()) {
       this.onPlayerDeath();
     }
@@ -471,7 +711,6 @@ export class WorldScene extends Phaser.Scene {
     m.hpBar.destroy();
     m.hpBarBg.destroy();
 
-    // Award EXP.
     const balance = this.registry_.getBalance();
     const exp = m.instance.def.expReward;
     const result = this.player.awardExp(balance.expCurve, balance.statCurves, exp);
@@ -485,10 +724,20 @@ export class WorldScene extends Phaser.Scene {
       );
     }
 
-    // Drop loot.
-    const table: LootTable | undefined = this.registry_.getLootTable(
-      m.instance.def.lootTableId,
-    );
+    const update = this.quests.emit({ kind: 'monster.killed', id: m.instance.def.id });
+    for (const u of update.updates) {
+      this.spawnFloat(
+        this.playerBody.x,
+        this.playerBody.y - 48,
+        `${u.questId} ${u.progress}/${u.target}`,
+        '#a0c0ff',
+      );
+    }
+    for (const c of update.completed) {
+      this.spawnFloat(this.playerBody.x, this.playerBody.y - 60, `quest done: ${c.questId}`, '#ffe066');
+    }
+
+    const table = this.registry_.getLootTable(m.instance.def.lootTableId);
     if (table === undefined) {
       return;
     }
@@ -529,6 +778,7 @@ export class WorldScene extends Phaser.Scene {
         if (item !== undefined) {
           this.inventory.add(item, g.qty);
           this.spawnFloat(g.rect.x, g.rect.y - 8, `+${g.qty} ${item.name.en}`, '#c0e6ff');
+          this.quests.emit({ kind: 'item.acquired', id: item.id, count: g.qty });
         }
         g.rect.destroy();
         this.grounds.splice(i, 1);
@@ -544,8 +794,9 @@ export class WorldScene extends Phaser.Scene {
   private spawnFloat(x: number, y: number, text: string, color: string): void {
     const obj = this.add
       .text(x, y, text, { fontFamily: 'monospace', fontSize: '7px', color })
-      .setOrigin(0.5, 1);
-    this.floats.push({ obj, ttlMs: 600, vy: -16 });
+      .setOrigin(0.5, 1)
+      .setDepth(1002);
+    this.floats.push({ obj, ttlMs: 800, vy: -16 });
   }
 
   private tickFloats(deltaMs: number): void {
@@ -557,7 +808,7 @@ export class WorldScene extends Phaser.Scene {
       }
       f.ttlMs -= deltaMs;
       f.obj.y += f.vy * dt;
-      f.obj.alpha = Math.max(0, f.ttlMs / 600);
+      f.obj.alpha = Math.max(0, f.ttlMs / 800);
       if (f.ttlMs <= 0) {
         f.obj.destroy();
         this.floats.splice(i, 1);
@@ -569,13 +820,14 @@ export class WorldScene extends Phaser.Scene {
     const { width, height } = this.scale;
     this.respawnTimerMs = 2500;
     this.deathOverlay = this.add
-      .text(width / 2, height / 2, 'YOU DIED\nrespawning...', {
+      .text(width / 2, height / 2, 'YOU DIED\nrespawning in Eldermill...', {
         fontFamily: 'monospace',
         fontSize: '12px',
         color: '#ff6060',
         align: 'center',
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setDepth(2000);
   }
 
   private tickRespawn(deltaMs: number): void {
@@ -587,19 +839,35 @@ export class WorldScene extends Phaser.Scene {
       this.deathOverlay.destroy();
       this.deathOverlay = null;
     }
-    const { width, height } = this.scale;
-    this.playerBody.x = width / 2;
-    this.playerBody.y = height / 2;
-    this.playerSprite.x = width / 2;
-    this.playerSprite.y = height / 2 - PLAYER_SIZE / 2 + 1 - 2;
     this.player.heal(99999);
-    // Clear all monsters around so respawn is safe.
+    if (this.worldState.transitionTo('map.plains.eldermill', 'spawn.center')) {
+      this.loadCurrentMap();
+    }
+  }
+
+  private clearMonsters(): void {
     for (const m of this.monsters) {
       if (m.alive) {
-        this.handleMonsterDeath(m);
+        m.sprite.destroy();
+        m.hpBar.destroy();
+        m.hpBarBg.destroy();
       }
     }
     this.monsters = [];
-    this.cooldowns.clear();
+  }
+
+  private clearNpcs(): void {
+    for (const n of this.npcs) {
+      n.sprite.destroy();
+      n.label.destroy();
+    }
+    this.npcs = [];
+  }
+
+  private clearGrounds(): void {
+    for (const g of this.grounds) {
+      g.rect.destroy();
+    }
+    this.grounds = [];
   }
 }

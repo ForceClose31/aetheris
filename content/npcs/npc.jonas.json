@@ -1,0 +1,10 @@
+{
+  "id": "npc.jonas",
+  "name": { "en": "Jonas the Innkeeper" },
+  "dialogueId": "dlg.jonas.default",
+  "schedule": [
+    { "fromHour": 6, "toHour": 22, "mapId": "map.plains.eldermill", "pos": [3, 4] }
+  ],
+  "placeholderColor": "8090c0",
+  "description": "Keeps the Eldermill inn warm and the stew warmer."
+}

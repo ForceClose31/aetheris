@@ -1,0 +1,43 @@
+{
+  "id": "map.plains.field_south",
+  "name": { "en": "South Plains" },
+  "type": "field",
+  "tileSize": 16,
+  "tiles": [
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 5, 5, 5, 5, 5, 5, 5, 5, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1],
+    [1, 5, 5, 5, 5, 5, 5, 5, 5, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1],
+    [1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1],
+    [1, 5, 5, 5, 5, 5, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1],
+    [1, 5, 5, 5, 5, 5, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1],
+    [1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 5, 5, 5, 5, 1],
+    [1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 5, 5, 5, 5, 1],
+    [1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1],
+    [1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1],
+    [1, 5, 5, 5, 5, 5, 5, 5, 5, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+  ],
+  "defaultSpawn": "spawn.from_north",
+  "spawns": [
+    { "id": "spawn.from_north", "pos": [9, 1] },
+    { "id": "spawn.cave_mouth", "pos": [9, 10] }
+  ],
+  "exits": [
+    {
+      "id": "exit.to_north",
+      "rect": [9, 0, 1, 1],
+      "to": { "mapId": "map.plains.field_north", "marker": "spawn.from_south" }
+    },
+    {
+      "id": "exit.to_cave",
+      "rect": [9, 11, 1, 1],
+      "to": { "mapId": "map.plains.cave", "marker": "spawn.entrance" }
+    }
+  ],
+  "npcs": [],
+  "monsters": [
+    { "monsterId": "mon.goblin_scout", "weight": 2, "maxConcurrent": 3 },
+    { "monsterId": "mon.green_slime", "weight": 1, "maxConcurrent": 2 }
+  ],
+  "indoor": false
+}

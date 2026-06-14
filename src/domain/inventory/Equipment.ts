@@ -5,11 +5,11 @@
  * removed atomically on unequip.
  */
 
+import type { Item, Slot } from '@data/schemas/item.schema';
 import type { Modifier } from '@domain/actors/Modifier';
 import type { Player } from '@domain/actors/Player';
 import type { StatKey } from '@domain/actors/StatBlock';
 
-import type { Item, Slot } from '@data/schemas/item.schema';
 
 const EQUIP_SLOTS = [
   'main',

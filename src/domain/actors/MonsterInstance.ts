@@ -5,12 +5,12 @@
  * The instance owns its own StatusContainer and HP/MP pools.
  */
 
+import type { Monster } from '@data/schemas/monster.schema';
 import { computeDerivedStats, type DerivedStats } from '@domain/actors/DerivedStats';
+import type { Element, StatBlock, StatKey } from '@domain/actors/StatBlock';
 import { StatusContainer } from '@systems/combat/StatusContainer';
 
-import type { Element, StatBlock, StatKey } from '@domain/actors/StatBlock';
 
-import type { Monster } from '@data/schemas/monster.schema';
 
 export interface MonsterStats extends StatBlock, DerivedStats {}
 

@@ -1,6 +1,6 @@
+import type { StatusEffect } from '@data/schemas/status_effect.schema';
 import { describe, expect, it } from 'vitest';
 
-import type { StatusEffect } from '@data/schemas/status_effect.schema';
 
 import { StatusContainer } from './StatusContainer';
 

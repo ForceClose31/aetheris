@@ -1,7 +1,7 @@
 import { Rng } from '@core/Rng';
+import type { LootTable } from '@data/schemas/loot_table.schema';
 import { describe, expect, it } from 'vitest';
 
-import type { LootTable } from '@data/schemas/loot_table.schema';
 
 import { rollLoot } from './Loot';
 

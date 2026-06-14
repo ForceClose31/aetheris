@@ -1,0 +1,45 @@
+{
+  "id": "map.plains.field_north",
+  "name": { "en": "North Plains" },
+  "type": "field",
+  "tileSize": 16,
+  "tiles": [
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 5, 5, 5, 5, 5, 5, 5, 5, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1],
+    [1, 5, 5, 5, 5, 5, 5, 5, 5, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1],
+    [1, 5, 5, 5, 5, 1, 5, 5, 5, 4, 5, 5, 5, 5, 1, 1, 5, 5, 5, 1],
+    [1, 5, 5, 5, 5, 5, 5, 5, 5, 4, 5, 5, 5, 5, 5, 1, 5, 5, 5, 1],
+    [1, 5, 5, 5, 5, 5, 5, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 1],
+    [1, 5, 5, 5, 5, 5, 5, 4, 5, 5, 5, 4, 5, 5, 5, 5, 5, 5, 5, 1],
+    [1, 5, 5, 1, 5, 5, 5, 4, 5, 5, 5, 4, 5, 5, 5, 5, 5, 5, 5, 1],
+    [1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1],
+    [1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1],
+    [1, 5, 5, 5, 5, 5, 5, 5, 5, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1],
+    [1, 5, 5, 5, 5, 5, 5, 5, 5, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+  ],
+  "defaultSpawn": "spawn.center",
+  "spawns": [
+    { "id": "spawn.from_eldermill", "pos": [9, 1] },
+    { "id": "spawn.center", "pos": [9, 6] },
+    { "id": "spawn.from_south", "pos": [9, 11] }
+  ],
+  "exits": [
+    {
+      "id": "exit.to_eldermill",
+      "rect": [9, 0, 1, 1],
+      "to": { "mapId": "map.plains.eldermill", "marker": "spawn.from_north" }
+    },
+    {
+      "id": "exit.to_south",
+      "rect": [9, 12, 1, 1],
+      "to": { "mapId": "map.plains.field_south", "marker": "spawn.from_north" }
+    }
+  ],
+  "npcs": [],
+  "monsters": [
+    { "monsterId": "mon.green_slime", "weight": 3, "maxConcurrent": 4 },
+    { "monsterId": "mon.goblin_scout", "weight": 1, "maxConcurrent": 2 }
+  ],
+  "indoor": false
+}
