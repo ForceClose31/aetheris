@@ -1,0 +1,16 @@
+{
+  "id": "stx.bleed",
+  "name": { "en": "Bleed" },
+  "tag": "bleed",
+  "durationMs": 5000,
+  "stacking": "stack",
+  "maxStacks": 5,
+  "body": {
+    "kind": "dot",
+    "element": "phys",
+    "base": 1,
+    "coef": 0.2,
+    "scaling": "str",
+    "tickIntervalMs": 1000
+  }
+}

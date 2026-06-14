@@ -1,0 +1,16 @@
+{
+  "id": "stx.burn",
+  "name": { "en": "Burn" },
+  "tag": "burn",
+  "durationMs": 4000,
+  "stacking": "refresh",
+  "maxStacks": 1,
+  "body": {
+    "kind": "dot",
+    "element": "fire",
+    "base": 2,
+    "coef": 0.4,
+    "scaling": "int",
+    "tickIntervalMs": 1000
+  }
+}

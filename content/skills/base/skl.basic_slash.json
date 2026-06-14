@@ -1,0 +1,12 @@
+{
+  "id": "skl.basic_slash",
+  "name": { "en": "Basic Slash" },
+  "unlockLevel": 1,
+  "cost": { "stamina": 5, "cooldownMs": 250 },
+  "power": { "coef": 1.0, "base": 2, "scaling": "str" },
+  "element": "phys",
+  "shape": { "kind": "single", "range": 18 },
+  "effects": [],
+  "tags": ["melee", "starter"],
+  "description": "A grounded slash with the equipped weapon."
+}

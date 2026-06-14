@@ -1,16 +1,21 @@
 /**
  * HudScene - overlay rendered on top of WorldScene.
  *
- * Shows HP/MP/Stamina bars, level, EXP progress, and free points (when > 0).
+ * Phase 1: HP/MP/Stamina bars, level, EXP progress, free points.
+ * Phase 2: gold, inventory count, skill cooldown chips.
  */
 
 import { getRootLocator } from '@core/ServiceLocator';
 import { expToNext } from '@systems/leveling/Leveling';
 import Phaser from 'phaser';
 
+import type { CooldownTracker } from '@systems/combat/CooldownTracker';
+
 import type { Player } from '@domain/actors/Player';
+import type { Inventory } from '@domain/inventory/Inventory';
 
 import type { ContentRegistry } from '@data/registry/ContentRegistry';
+
 
 
 
@@ -19,10 +24,16 @@ import { TOKENS } from './BootScene';
 const BAR_W = 64;
 const BAR_H = 4;
 const PADDING = 4;
+const SKILL_HOTBAR: { id: string; key: string }[] = [
+  { id: 'skl.basic_slash', key: 'J' },
+  { id: 'skl.firebolt', key: 'K' },
+];
 
 export class HudScene extends Phaser.Scene {
   private player!: Player;
   private registry_!: ContentRegistry;
+  private inventory!: Inventory;
+  private cooldowns!: CooldownTracker;
 
   private hpBar!: Phaser.GameObjects.Rectangle;
   private mpBar!: Phaser.GameObjects.Rectangle;
@@ -33,6 +44,9 @@ export class HudScene extends Phaser.Scene {
   private levelText!: Phaser.GameObjects.Text;
   private expText!: Phaser.GameObjects.Text;
   private pointsText!: Phaser.GameObjects.Text;
+  private goldText!: Phaser.GameObjects.Text;
+  private bagText!: Phaser.GameObjects.Text;
+  private skillChips: { label: Phaser.GameObjects.Text; cd: Phaser.GameObjects.Text }[] = [];
 
   constructor() {
     super({ key: 'Hud' });
@@ -42,6 +56,8 @@ export class HudScene extends Phaser.Scene {
     const locator = getRootLocator();
     this.player = locator.get(TOKENS.Player);
     this.registry_ = locator.get(TOKENS.ContentRegistry);
+    this.inventory = locator.get(TOKENS.Inventory);
+    this.cooldowns = locator.get(TOKENS.CooldownTracker);
 
     const x0 = PADDING;
     let y = PADDING;
@@ -80,7 +96,7 @@ export class HudScene extends Phaser.Scene {
       .text(x0 + 14 + BAR_W + 4, y, '0/0', { ...labelStyle, color: '#9999a0' })
       .setOrigin(0, 0);
 
-    const { width } = this.scale;
+    const { width, height } = this.scale;
     this.levelText = this.add
       .text(width - PADDING, PADDING, 'Lv 1', {
         ...labelStyle,
@@ -99,6 +115,37 @@ export class HudScene extends Phaser.Scene {
         color: '#ffd87a',
       })
       .setOrigin(1, 0);
+    this.goldText = this.add
+      .text(width - PADDING, PADDING + 26, 'g 0', {
+        ...labelStyle,
+        color: '#ffd87a',
+      })
+      .setOrigin(1, 0);
+    this.bagText = this.add
+      .text(width - PADDING, PADDING + 34, 'bag 0', {
+        ...labelStyle,
+        color: '#9999a0',
+      })
+      .setOrigin(1, 0);
+
+    // Skill hotbar at bottom.
+    const baseX = PADDING;
+    const baseY = height - PADDING - 14;
+    for (let i = 0; i < SKILL_HOTBAR.length; i++) {
+      const entry = SKILL_HOTBAR[i];
+      if (entry === undefined) {
+        continue;
+      }
+      const x = baseX + i * 50;
+      const skill = this.registry_.getSkill(entry.id);
+      const name = skill?.name.en ?? entry.id;
+      const label = this.add.text(x, baseY, `[${entry.key}] ${name}`, {
+        ...labelStyle,
+        color: '#aaaab0',
+      });
+      const cd = this.add.text(x, baseY + 8, '', { ...labelStyle, color: '#aa6666' });
+      this.skillChips.push({ label, cd });
+    }
 
     this.refresh();
   }
@@ -132,5 +179,22 @@ export class HudScene extends Phaser.Scene {
 
     const pts = this.player.getFreePoints();
     this.pointsText.setText(pts > 0 ? `+${pts} pts` : '');
+
+    this.goldText.setText(`g ${this.inventory.getGold()}`);
+    this.bagText.setText(`bag ${this.inventory.totalItems()}`);
+
+    for (let i = 0; i < SKILL_HOTBAR.length; i++) {
+      const entry = SKILL_HOTBAR[i];
+      const chip = this.skillChips[i];
+      if (entry === undefined || chip === undefined) {
+        continue;
+      }
+      const remaining = this.cooldowns.remaining(entry.id);
+      if (remaining > 0) {
+        chip.cd.setText(`${(remaining / 1000).toFixed(1)}s`);
+      } else {
+        chip.cd.setText('');
+      }
+    }
   }
 }

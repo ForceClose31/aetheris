@@ -1,0 +1,10 @@
+{
+  "id": "skl.goblin_jab",
+  "name": { "en": "Jab" },
+  "unlockLevel": 1,
+  "cost": { "cooldownMs": 600 },
+  "power": { "coef": 1.0, "base": 2, "scaling": "str" },
+  "element": "phys",
+  "shape": { "kind": "single", "range": 16 },
+  "tags": ["monster", "melee"]
+}

@@ -1,0 +1,9 @@
+{
+  "id": "loot.slime",
+  "rolls": 1,
+  "entries": [
+    { "kind": "gold", "weight": 6, "range": [1, 4] },
+    { "kind": "item", "itemId": "csm.minor_potion", "weight": 2, "qty": [1, 1], "luckThreshold": 0 },
+    { "kind": "nothing", "weight": 4 }
+  ]
+}

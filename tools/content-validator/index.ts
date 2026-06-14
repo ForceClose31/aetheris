@@ -1,6 +1,7 @@
 /**
  * content-validator - CLI that validates every JSON file under `content/` against
- * its schema, plus structural checks (id-vs-filename match, duplicate ids, locale keys).
+ * its schema, plus structural checks (id-vs-filename match, duplicate ids,
+ * cross-references between skills/status/monsters/items/loot).
  *
  * Used in CI; also useful as a pre-commit hook target.
  *
@@ -18,6 +19,10 @@ import {
   STAT_CURVES_SCHEMA,
 } from '../../src/data/schemas/balance.schema';
 import { ITEM_SCHEMA } from '../../src/data/schemas/item.schema';
+import { LOOT_TABLE_SCHEMA } from '../../src/data/schemas/loot_table.schema';
+import { MONSTER_SCHEMA } from '../../src/data/schemas/monster.schema';
+import { SKILL_SCHEMA } from '../../src/data/schemas/skill.schema';
+import { STATUS_EFFECT_SCHEMA } from '../../src/data/schemas/status_effect.schema';
 
 import type { ZodTypeAny } from 'zod';
 
@@ -79,10 +84,20 @@ const collectZodIssues = (
   return parsed.data as { id?: string };
 };
 
-const validateItems = async (issues: Issue[]): Promise<void> => {
-  const itemsDir = join(CONTENT_DIR, 'items');
-  const files = await walkJson(itemsDir);
-  const seen = new Map<string, string>(); // id -> first file
+interface KindSpec {
+  readonly dir: string;
+  readonly tag: string;
+  readonly schema: ZodTypeAny;
+}
+
+const validateKind = async (
+  spec: KindSpec,
+  issues: Issue[],
+  parsed: Map<string, unknown>,
+): Promise<void> => {
+  const dir = join(CONTENT_DIR, spec.dir);
+  const files = await walkJson(dir);
+  const seen = new Map<string, string>();
 
   for (const file of files) {
     const rel = relative(ROOT, file).split(sep).join('/');
@@ -98,12 +113,12 @@ const validateItems = async (issues: Issue[]): Promise<void> => {
       continue;
     }
 
-    const parsed = collectZodIssues(ITEM_SCHEMA, raw, rel, issues);
-    if (parsed === null || typeof parsed.id !== 'string') {
+    const data = collectZodIssues(spec.schema, raw, rel, issues);
+    if (data === null || typeof data.id !== 'string') {
       continue;
     }
 
-    const id = parsed.id;
+    const id = data.id;
     const filenameId = file.split(sep).pop()?.replace(/\.json$/, '') ?? '';
     if (filenameId !== id) {
       issues.push({
@@ -112,7 +127,6 @@ const validateItems = async (issues: Issue[]): Promise<void> => {
         message: `filename "${filenameId}" must match id "${id}"`,
       });
     }
-
     const existing = seen.get(id);
     if (existing !== undefined) {
       issues.push({
@@ -122,6 +136,7 @@ const validateItems = async (issues: Issue[]): Promise<void> => {
       });
     } else {
       seen.set(id, rel);
+      parsed.set(id, data);
     }
   }
 };
@@ -166,13 +181,96 @@ const validateBalance = async (issues: Issue[]): Promise<void> => {
   }
 };
 
+const crossRefCheck = (
+  items: Map<string, unknown>,
+  skills: Map<string, unknown>,
+  status: Map<string, unknown>,
+  monsters: Map<string, unknown>,
+  loot: Map<string, unknown>,
+  issues: Issue[],
+): void => {
+  for (const [id, raw] of skills) {
+    const data = raw as { effects?: { statusId: string }[] };
+    for (const eff of data.effects ?? []) {
+      if (!status.has(eff.statusId)) {
+        issues.push({
+          file: `skill:${id}`,
+          path: 'effects.statusId',
+          message: `unknown status effect "${eff.statusId}"`,
+        });
+      }
+    }
+  }
+  for (const [id, raw] of monsters) {
+    const data = raw as { skills?: string[]; lootTableId: string };
+    for (const sid of data.skills ?? []) {
+      if (!skills.has(sid)) {
+        issues.push({
+          file: `monster:${id}`,
+          path: 'skills',
+          message: `unknown skill "${sid}"`,
+        });
+      }
+    }
+    if (!loot.has(data.lootTableId)) {
+      issues.push({
+        file: `monster:${id}`,
+        path: 'lootTableId',
+        message: `unknown loot table "${data.lootTableId}"`,
+      });
+    }
+  }
+  for (const [id, raw] of loot) {
+    const data = raw as {
+      entries?: ({ kind: 'item'; itemId: string } | { kind: 'gold' } | { kind: 'nothing' })[];
+    };
+    for (const entry of data.entries ?? []) {
+      if (entry.kind === 'item' && !items.has(entry.itemId)) {
+        issues.push({
+          file: `loot_table:${id}`,
+          path: 'entries.itemId',
+          message: `unknown item "${entry.itemId}"`,
+        });
+      }
+    }
+  }
+};
+
 const main = async (): Promise<number> => {
   const issues: Issue[] = [];
-  await validateItems(issues);
+  const items = new Map<string, unknown>();
+  const skills = new Map<string, unknown>();
+  const status = new Map<string, unknown>();
+  const monsters = new Map<string, unknown>();
+  const loot = new Map<string, unknown>();
+
+  await validateKind({ dir: 'items', tag: 'item', schema: ITEM_SCHEMA }, issues, items);
+  await validateKind({ dir: 'skills', tag: 'skill', schema: SKILL_SCHEMA }, issues, skills);
+  await validateKind(
+    { dir: 'status_effects', tag: 'status_effect', schema: STATUS_EFFECT_SCHEMA },
+    issues,
+    status,
+  );
+  await validateKind(
+    { dir: 'monsters', tag: 'monster', schema: MONSTER_SCHEMA },
+    issues,
+    monsters,
+  );
+  await validateKind(
+    { dir: 'loot_tables', tag: 'loot_table', schema: LOOT_TABLE_SCHEMA },
+    issues,
+    loot,
+  );
   await validateBalance(issues);
 
   if (issues.length === 0) {
-    process.stdout.write('content:validate OK\n');
+    crossRefCheck(items, skills, status, monsters, loot, issues);
+  }
+
+  if (issues.length === 0) {
+    process.stdout.write(
+      `content:validate OK (${items.size} items, ${skills.size} skills, ${status.size} status, ${monsters.size} monsters, ${loot.size} loot tables)\n`,
+    );
     return 0;
   }
 

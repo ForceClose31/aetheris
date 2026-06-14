@@ -1,0 +1,12 @@
+{
+  "id": "skl.firebolt",
+  "name": { "en": "Firebolt" },
+  "unlockLevel": 1,
+  "cost": { "mp": 6, "cooldownMs": 800 },
+  "power": { "coef": 1.4, "base": 3, "scaling": "int" },
+  "element": "fire",
+  "shape": { "kind": "single", "range": 60 },
+  "effects": [{ "statusId": "stx.burn", "chance": 0.6 }],
+  "tags": ["ranged", "fire"],
+  "description": "A small bolt of flame that may set targets ablaze."
+}

@@ -1,0 +1,16 @@
+{
+  "id": "mon.green_slime",
+  "name": { "en": "Green Slime" },
+  "family": "slime",
+  "tier": 1,
+  "levelRange": [1, 4],
+  "base": { "hp": 12, "mp": 0, "str": 3, "vit": 2, "agi": 2, "dex": 2, "int": 1, "luk": 1 },
+  "growth": { "hp": 4, "mp": 0, "str": 1, "vit": 1, "agi": 0, "dex": 0, "int": 0, "luk": 0 },
+  "resistances": { "phys": -0.1, "fire": -0.4, "ice": 0.2, "void": 0.5 },
+  "skills": ["skl.slime_bonk"],
+  "aiTreeId": "ai.basic_chaser",
+  "lootTableId": "loot.slime",
+  "size": "S",
+  "expReward": 8,
+  "description": "Wobbly, weak to fire."
+}

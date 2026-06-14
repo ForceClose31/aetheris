@@ -1,0 +1,16 @@
+{
+  "id": "mon.goblin_scout",
+  "name": { "en": "Goblin Scout" },
+  "family": "goblin",
+  "tier": 1,
+  "levelRange": [2, 6],
+  "base": { "hp": 18, "mp": 0, "str": 5, "vit": 3, "agi": 5, "dex": 4, "int": 1, "luk": 2 },
+  "growth": { "hp": 5, "mp": 0, "str": 1, "vit": 1, "agi": 1, "dex": 1, "int": 0, "luk": 0 },
+  "resistances": { "phys": 0, "dark": 0.1 },
+  "skills": ["skl.goblin_jab"],
+  "aiTreeId": "ai.basic_chaser",
+  "lootTableId": "loot.goblin",
+  "size": "M",
+  "expReward": 14,
+  "description": "Fast and a bit cocky."
+}

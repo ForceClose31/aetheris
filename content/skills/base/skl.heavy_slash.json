@@ -1,0 +1,12 @@
+{
+  "id": "skl.heavy_slash",
+  "name": { "en": "Heavy Slash" },
+  "unlockLevel": 1,
+  "cost": { "stamina": 18, "cooldownMs": 1200 },
+  "power": { "coef": 1.8, "base": 4, "scaling": "str" },
+  "element": "phys",
+  "shape": { "kind": "single", "range": 22 },
+  "effects": [{ "statusId": "stx.bleed", "chance": 0.35 }],
+  "tags": ["melee", "heavy"],
+  "description": "A wind-up strike that often draws blood."
+}

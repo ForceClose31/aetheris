@@ -1,0 +1,10 @@
+{
+  "id": "skl.slime_bonk",
+  "name": { "en": "Bonk" },
+  "unlockLevel": 1,
+  "cost": { "cooldownMs": 800 },
+  "power": { "coef": 0.9, "base": 1, "scaling": "str" },
+  "element": "phys",
+  "shape": { "kind": "single", "range": 14 },
+  "tags": ["monster", "melee"]
+}
